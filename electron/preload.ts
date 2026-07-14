@@ -61,6 +61,8 @@ const api: LineApi = Object.freeze({
   },
   getPlatformInfo: () =>
     ipcRenderer.invoke(IPC_CHANNELS.platformInfo) as Promise<PlatformInfo>,
+  readyForExternalFiles: () =>
+    ipcRenderer.invoke(IPC_CHANNELS.rendererReady) as Promise<LineDocument[]>,
   onMenuCommand: (callback: (command: MenuCommand) => void) =>
     subscribe<MenuCommand>(IPC_CHANNELS.menuCommand, callback),
   onShortcut: (callback: (command: MenuCommand) => void) =>

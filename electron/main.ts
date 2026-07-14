@@ -23,15 +23,15 @@ import {
   type SaveFileAsInput,
   type SaveFileInput,
 } from './types'
+import { ExternalFileQueue } from './externalFileQueue'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 const SUPPORTED_EXTENSIONS = new Set(['.md', '.markdown', '.txt'])
 const grantedPaths = new Set<string>()
-const pendingOpenPaths = new Set<string>()
+const externalFileQueue = new ExternalFileQueue()
 
 let mainWindow: BrowserWindow | null = null
-let rendererReady = false
 
 function normalizePath(filePath: string): string {
   return path.resolve(filePath)
@@ -298,14 +298,28 @@ function registerIpcHandlers(): void {
       },
     }),
   )
+  ipcMain.handle(IPC_CHANNELS.rendererReady, async (event) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents) return []
+    const targetWindow = mainWindow
+    const pendingPaths = externalFileQueue.markRendererReady()
+    const documents = await readExternalDocuments(pendingPaths)
+
+    if (
+      targetWindow !== mainWindow ||
+      targetWindow.isDestroyed() ||
+      event.sender.isDestroyed()
+    ) {
+      await sendExternalDocuments(pendingPaths)
+      return []
+    }
+
+    return documents
+  })
 }
 
-async function sendExternalDocuments(filePaths: string[]): Promise<void> {
-  if (!mainWindow || mainWindow.isDestroyed() || !rendererReady) {
-    filePaths.forEach((filePath) => pendingOpenPaths.add(filePath))
-    return
-  }
-
+async function readExternalDocuments(
+  filePaths: string[],
+): Promise<LineDocument[]> {
   const documents = await Promise.all(
     filePaths.map(async (filePath) => {
       try {
@@ -318,9 +332,35 @@ async function sendExternalDocuments(filePaths: string[]): Promise<void> {
   const readableDocuments = documents.filter(
     (document): document is LineDocument => document !== null,
   )
+  return readableDocuments
+}
+
+async function sendExternalDocuments(filePaths: string[]): Promise<void> {
+  if (
+    !mainWindow ||
+    mainWindow.isDestroyed() ||
+    mainWindow.webContents.isDestroyed()
+  ) {
+    externalFileQueue.resetRenderer()
+  }
+
+  const targetWindow = mainWindow
+  const readyPaths = externalFileQueue.accept(filePaths)
+  if (!targetWindow || targetWindow.isDestroyed() || readyPaths.length === 0) return
+
+  const readableDocuments = await readExternalDocuments(readyPaths)
+
+  if (
+    targetWindow !== mainWindow ||
+    targetWindow.isDestroyed() ||
+    targetWindow.webContents.isDestroyed()
+  ) {
+    await sendExternalDocuments(readyPaths)
+    return
+  }
 
   if (readableDocuments.length > 0) {
-    mainWindow.webContents.send(
+    targetWindow.webContents.send(
       IPC_CHANNELS.externalFilesOpened,
       readableDocuments,
     )
@@ -328,7 +368,7 @@ async function sendExternalDocuments(filePaths: string[]): Promise<void> {
 }
 
 function createWindow(): BrowserWindow {
-  rendererReady = false
+  externalFileQueue.resetRenderer()
   const window = new BrowserWindow({
     width: 1520,
     height: 960,
@@ -353,16 +393,7 @@ function createWindow(): BrowserWindow {
   window.on('closed', () => {
     if (mainWindow === window) {
       mainWindow = null
-      rendererReady = false
-    }
-  })
-
-  window.webContents.once('did-finish-load', () => {
-    rendererReady = true
-    if (pendingOpenPaths.size > 0) {
-      const filePaths = [...pendingOpenPaths]
-      pendingOpenPaths.clear()
-      void sendExternalDocuments(filePaths)
+      externalFileQueue.resetRenderer()
     }
   })
 

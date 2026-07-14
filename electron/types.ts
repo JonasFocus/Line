@@ -4,6 +4,7 @@ export const IPC_CHANNELS = {
   saveFile: 'line:documents:save-file',
   saveFileAs: 'line:documents:save-file-as',
   platformInfo: 'line:app:platform-info',
+  rendererReady: 'line:app:renderer-ready',
   menuCommand: 'line:menu:command',
   externalFilesOpened: 'line:documents:external-files-opened',
 } as const
@@ -55,6 +56,7 @@ export interface LineApi {
     input: SaveFileAsInput & { path?: string | null },
   ): Promise<LineDocument | null>
   getPlatformInfo(): Promise<PlatformInfo>
+  readyForExternalFiles(): Promise<LineDocument[]>
   onMenuCommand(callback: (command: MenuCommand) => void): () => void
   onShortcut(callback: (command: MenuCommand) => void): () => void
   onExternalFilesOpened(

@@ -375,6 +375,7 @@ export default function App() {
   const [activeOutlineId, setActiveOutlineId] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const toastTimer = useRef<number | null>(null)
+  const externalFilesReadyRef = useRef(false)
   const documentsRef = useRef(documents)
   const selectedIdRef = useRef(selectedId)
 
@@ -389,6 +390,23 @@ export default function App() {
     if (toastTimer.current) window.clearTimeout(toastTimer.current)
     toastTimer.current = window.setTimeout(() => setToast(null), 2600)
   }, [])
+
+  const acceptExternalDocuments = useCallback((externalDocuments: unknown[]) => {
+    const opened = externalDocuments.map(normalizeImported).filter((document): document is LineDocument => document !== null)
+    if (!opened.length) return
+    const { documents: safeOpened, protectedCount } = reconcileOpenedDocuments(documentsRef.current, opened)
+    const openedIds = new Set(safeOpened.map((document) => document.id))
+    setDocuments((current) => [...safeOpened, ...current.filter((document) => !openedIds.has(document.id))])
+    setSelectedId(safeOpened[0].id)
+    setSaveState(safeOpened[0].dirty ? 'dirty' : 'idle')
+    setActiveOutlineId(null)
+    setActiveFilter('all')
+    setActiveTag(null)
+    setSearch('')
+    if (protectedCount > 0) {
+      showToast('Kept your unsaved version of an open document')
+    }
+  }, [showToast])
 
   const filteredDocuments = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -555,25 +573,18 @@ export default function App() {
     }
     const api = lineApi()
     const disposeMenu = api?.onMenuCommand?.(handleAction)
-    const disposeExternal = api?.onExternalFilesOpened?.((externalDocuments) => {
-      const opened = externalDocuments.map(normalizeImported).filter((document): document is LineDocument => document !== null)
-      if (!opened.length) return
-      const { documents: safeOpened, protectedCount } = reconcileOpenedDocuments(documentsRef.current, opened)
-      const openedIds = new Set(safeOpened.map((document) => document.id))
-      setDocuments((current) => [...safeOpened, ...current.filter((document) => !openedIds.has(document.id))])
-      setSelectedId(safeOpened[0].id)
-      setActiveFilter('all')
-      setActiveTag(null)
-      setSearch('')
-      if (protectedCount > 0) {
-        showToast('Kept your unsaved version of an open document')
-      }
-    })
+    const disposeExternal = api?.onExternalFilesOpened?.(acceptExternalDocuments)
+    if (api?.readyForExternalFiles && !externalFilesReadyRef.current) {
+      externalFilesReadyRef.current = true
+      void api.readyForExternalFiles()
+        .then(acceptExternalDocuments)
+        .catch((reason) => setError(reason instanceof Error ? reason.message : 'Could not open files from Finder.'))
+    }
     return () => {
       if (typeof disposeMenu === 'function') disposeMenu()
       if (typeof disposeExternal === 'function') disposeExternal()
     }
-  }, [createDocument, importDocument, saveDocument, showToast])
+  }, [acceptExternalDocuments, createDocument, importDocument, saveDocument])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
