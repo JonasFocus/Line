@@ -26,9 +26,10 @@ type WriteTemporaryFile = (
 type ReplaceFile = (source: string, destination: string) => Promise<void>
 type SyncDirectory = (directoryPath: string) => Promise<void>
 
-interface AtomicWriteOptions {
+export interface AtomicWriteOptions {
   replaceFile?: ReplaceFile
   syncDirectory?: SyncDirectory
+  validateBeforeCommit?: () => Promise<void>
   writeTemporaryFile?: WriteTemporaryFile
 }
 
@@ -149,6 +150,7 @@ export async function atomicWriteFile(
   // Replacing an inode would silently sever its other hard links. Preserve the
   // existing behavior for this uncommon case instead of changing file identity.
   if (existingStats && existingStats.nlink > 1) {
+    await options.validateBeforeCommit?.()
     await writeInPlace(destination, content)
     return
   }
@@ -159,6 +161,7 @@ export async function atomicWriteFile(
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
     if (existingStats && (code === 'EACCES' || code === 'EPERM')) {
+      await options.validateBeforeCommit?.()
       await writeInPlace(destination, content)
       return
     }
@@ -182,6 +185,7 @@ export async function atomicWriteFile(
       content,
       existingMode,
     )
+    await options.validateBeforeCommit?.()
     await replaceFile(temporaryPath, destination)
     committed = true
     await syncDirectoryWhenSupported(directoryPath, sync)

@@ -17,6 +17,7 @@ export interface LineDocument {
   name: string
   content: string
   modifiedAt: string | null
+  revision: string
 }
 
 export interface OpenFilesOptions {
@@ -26,12 +27,14 @@ export interface OpenFilesOptions {
 export interface SaveFileInput {
   path: string
   content: string
+  expectedRevision: string
 }
 
 export interface SaveFileAsInput {
   content: string
   currentPath?: string | null
   suggestedName?: string
+  saveCopy?: boolean
 }
 
 export interface PlatformInfo {
@@ -53,7 +56,10 @@ export interface LineApi {
   saveFile(input: SaveFileInput): Promise<LineDocument>
   saveFileAs(input: SaveFileAsInput): Promise<LineDocument | null>
   saveDocument(
-    input: SaveFileAsInput & { path?: string | null },
+    input: SaveFileAsInput & {
+      path?: string | null
+      expectedRevision?: string | null
+    },
   ): Promise<LineDocument | null>
   getPlatformInfo(): Promise<PlatformInfo>
   readyForExternalFiles(): Promise<LineDocument[]>

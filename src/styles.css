@@ -939,7 +939,17 @@ textarea:focus-visible {
 }
 
 .error-banner span { flex: 1; }
-.error-banner button { display: grid; width: 24px; height: 24px; padding: 0; color: inherit; background: transparent; place-items: center; }
+.error-banner button { color: inherit; background: transparent; }
+.error-banner .error-action {
+  min-width: max-content;
+  padding: 5px 9px;
+  font-size: 11px;
+  font-weight: 650;
+  border: 1px solid rgba(227, 154, 147, 0.3);
+  border-radius: 7px;
+}
+.error-banner .error-action:hover { background: rgba(227, 154, 147, 0.12); }
+.error-banner .error-dismiss { display: grid; width: 24px; height: 24px; padding: 0; place-items: center; }
 
 .toast {
   position: fixed;

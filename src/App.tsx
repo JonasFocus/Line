@@ -3,6 +3,7 @@ import { Icon, type IconName } from './components/Icon'
 import { extractOutline, MarkdownPreview, type OutlineItem } from './components/MarkdownPreview'
 import { seedDocuments as coreSeedDocuments, seedFolders } from './data'
 import { parseMarkdownMetadata } from './lib'
+import { LatestTaskQueue } from './latestTaskQueue'
 import { resolveSelectionAfterDocumentsChange, resolveVisibleSelection } from './selection'
 
 export interface LineDocument {
@@ -14,11 +15,17 @@ export interface LineDocument {
   favorite: boolean
   updatedAt: string
   path: string | null
+  revision: string | null
   dirty?: boolean
 }
 
 type EditorMode = 'edit' | 'split' | 'preview'
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
+type SaveRequest = {
+  document: LineDocument
+  saveAs: boolean
+  saveCopy: boolean
+}
 
 const folderNameById = new Map(seedFolders.map((folder) => [folder.id, folder.name]))
 
@@ -37,6 +44,7 @@ const seedDocuments: LineDocument[] = coreSeedDocuments.map((document) => ({
   favorite: document.isStarred,
   updatedAt: formatDate(document.updatedAt),
   path: null,
+  revision: null,
 }))
 
 const folders = seedFolders
@@ -89,6 +97,7 @@ function normalizeImported(value: unknown): LineDocument | null {
     favorite: Boolean(item.favorite),
     updatedAt: formatDate(typeof item.updatedAt === 'string' ? item.updatedAt : typeof item.modifiedAt === 'string' ? item.modifiedAt : null),
     path: typeof item.path === 'string' ? item.path : null,
+    revision: typeof item.revision === 'string' ? item.revision : null,
   }
 }
 
@@ -376,6 +385,7 @@ export default function App() {
   const [activeOutlineId, setActiveOutlineId] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const toastTimer = useRef<number | null>(null)
+  const saveQueueRef = useRef(new LatestTaskQueue<SaveRequest>())
   const externalFilesReadyRef = useRef(false)
   const documentsRef = useRef(documents)
   const selectedIdRef = useRef(selectedId)
@@ -399,6 +409,7 @@ export default function App() {
     const openedIds = new Set(safeOpened.map((document) => document.id))
     setDocuments((current) => [...safeOpened, ...current.filter((document) => !openedIds.has(document.id))])
     setSelectedId(safeOpened[0].id)
+    setError(null)
     setSaveState(safeOpened[0].dirty ? 'dirty' : 'idle')
     setActiveOutlineId(null)
     setActiveFilter('all')
@@ -427,6 +438,7 @@ export default function App() {
     const nextDocument = documentsRef.current.find((document) => document.id === nextSelectedId)
     selectedIdRef.current = nextSelectedId
     setSelectedId(nextSelectedId)
+    setError(null)
     setSaveState(nextDocument?.dirty ? 'dirty' : 'idle')
     setActiveOutlineId(null)
   }, [])
@@ -454,6 +466,7 @@ export default function App() {
       favorite: false,
       updatedAt: 'Just now',
       path: null,
+      revision: null,
       dirty: true,
     }
     try {
@@ -462,6 +475,7 @@ export default function App() {
       const created = shellDocument ? { ...draft, id: shellDocument.id, path: shellDocument.path } : draft
       setDocuments((current) => [created, ...current])
       setSelectedId(created.id)
+      setError(null)
       setActiveFilter('all')
       setActiveTag(null)
       setSearch('')
@@ -487,6 +501,7 @@ export default function App() {
       const importedIds = new Set(safeImported.map((document) => document.id))
       setDocuments((current) => [...safeImported, ...current.filter((document) => !importedIds.has(document.id))])
       setSelectedId(safeImported[0].id)
+      setError(null)
       setActiveFilter('all')
       setActiveTag(null)
       setSearch('')
@@ -502,40 +517,74 @@ export default function App() {
     }
   }, [showToast])
 
-  const saveDocument = useCallback(async (saveAs = false) => {
+  const saveDocument = useCallback(async (saveAs = false, saveCopy = false) => {
     if (!selectedDocument) return
-    const submittedContent = selectedDocument.content
-    setSaveState('saving')
-    try {
-      const api = lineApi()
-      const saveInput = {
-        content: selectedDocument.content,
-        path: selectedDocument.path,
-        currentPath: selectedDocument.path,
-        suggestedName: `${selectedDocument.title.replace(/[/:]/g, '-').trim() || 'Untitled'}.md`,
+
+    const request = { document: selectedDocument, saveAs, saveCopy }
+    await saveQueueRef.current.run(selectedDocument.id, request, async ({
+      document: documentToSave,
+      saveAs: requestedSaveAs,
+      saveCopy: requestedSaveCopy,
+    }) => {
+      const submittedContent = documentToSave.content
+      if (selectedIdRef.current === documentToSave.id) setSaveState('saving')
+
+      try {
+        const api = lineApi()
+        const safeTitle = documentToSave.title.replace(/[/:]/g, '-').trim() || 'Untitled'
+        const saveInput = {
+          content: documentToSave.content,
+          path: documentToSave.path,
+          currentPath: documentToSave.path,
+          expectedRevision: documentToSave.revision,
+          saveCopy: requestedSaveCopy,
+          suggestedName: `${safeTitle}${requestedSaveCopy ? ' (Line copy)' : ''}.md`,
+        }
+        const result = requestedSaveAs ? await api?.saveFileAs?.(saveInput) : await api?.saveDocument?.(saveInput)
+        if (api && result === null) {
+          if (selectedIdRef.current === documentToSave.id) {
+            setSaveState(documentToSave.dirty ? 'dirty' : 'idle')
+          }
+          return { continueWithPending: false }
+        }
+
+        const saved = normalizeImported(result)
+        const latestDocument = documentsRef.current.find((document) => document.id === documentToSave.id)
+        const hasNewerChanges = latestDocument?.content !== submittedContent
+        setDocuments((current) => current.map((document) => document.id === documentToSave.id ? {
+          ...document,
+          path: saved?.path ?? document.path,
+          revision: saved?.revision ?? document.revision,
+          updatedAt: saved?.updatedAt ?? document.updatedAt,
+          dirty: hasNewerChanges ? document.dirty : false,
+        } : document))
+        if (selectedIdRef.current === documentToSave.id) {
+          setSaveState(hasNewerChanges ? 'dirty' : 'saved')
+        }
+        showToast(hasNewerChanges ? 'Saved earlier edits; newer changes remain' : api ? 'Saved to disk' : 'Changes saved for this session')
+        return {
+          continueWithPending: true,
+          updatePending: (pending: SaveRequest): SaveRequest => saved ? {
+            ...pending,
+            document: {
+              ...pending.document,
+              path: saved.path,
+              revision: saved.revision,
+            },
+          } : pending,
+        }
+      } catch (reason) {
+        const message = reason instanceof Error ? reason.message : ''
+        const changedOnDisk = message.includes('changed on disk')
+        if (selectedIdRef.current === documentToSave.id) {
+          setSaveState(changedOnDisk ? 'dirty' : 'error')
+          setError(changedOnDisk
+            ? 'This document changed on disk. Use Save As to keep your version without overwriting the external changes.'
+            : message || 'The document could not be saved.')
+        }
+        return { continueWithPending: false }
       }
-      const result = saveAs ? await api?.saveFileAs?.(saveInput) : await api?.saveDocument?.(saveInput)
-      if (api && result === null) {
-        setSaveState(selectedDocument.dirty ? 'dirty' : 'idle')
-        return
-      }
-      const saved = normalizeImported(result)
-      const latestDocument = documentsRef.current.find((document) => document.id === selectedDocument.id)
-      const hasNewerChanges = latestDocument?.content !== submittedContent
-      setDocuments((current) => current.map((document) => document.id === selectedDocument.id ? {
-        ...document,
-        path: saved?.path ?? document.path,
-        updatedAt: saved?.updatedAt ?? document.updatedAt,
-        dirty: hasNewerChanges ? document.dirty : false,
-      } : document))
-      if (selectedIdRef.current === selectedDocument.id) {
-        setSaveState(hasNewerChanges ? 'dirty' : 'saved')
-      }
-      showToast(hasNewerChanges ? 'Saved earlier edits; newer changes remain' : api ? 'Saved to disk' : 'Changes saved for this session')
-    } catch (reason) {
-      setSaveState('error')
-      setError(reason instanceof Error ? reason.message : 'The document could not be saved.')
-    }
+    })
   }, [selectedDocument, showToast])
 
   const openFolder = importDocument
@@ -693,7 +742,16 @@ export default function App() {
       )}
 
       {loading && <div className="loading-bar" aria-label="Loading library"><span /></div>}
-      {error && <div className="error-banner" role="alert"><Icon name="warning" size={17} /><span>{error}</span><button onClick={() => setError(null)} type="button"><Icon name="close" size={14} /></button></div>}
+      {error && (
+        <div className="error-banner" role="alert">
+          <Icon name="warning" size={17} />
+          <span>{error}</span>
+          {error.includes('changed on disk') && (
+            <button className="error-action" onClick={() => { setError(null); void saveDocument(true, true) }} type="button">Save As…</button>
+          )}
+          <button aria-label="Dismiss error" className="error-dismiss" onClick={() => setError(null)} type="button"><Icon name="close" size={14} /></button>
+        </div>
+      )}
       {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   )

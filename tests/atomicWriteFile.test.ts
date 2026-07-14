@@ -130,6 +130,29 @@ describe('atomicWriteFile', () => {
     expect(await readdir(directory)).toEqual(['note.md'])
   })
 
+  it('revalidates immediately before replacing the destination', async () => {
+    const directory = await makeTemporaryDirectory()
+    const filePath = path.join(directory, 'note.md')
+    await writeFile(filePath, 'original')
+
+    await expect(
+      atomicWriteFile(filePath, 'line edit', {
+        validateBeforeCommit: async () => {
+          if (await readFile(filePath, 'utf8') !== 'original') {
+            throw new Error('document changed')
+          }
+        },
+        writeTemporaryFile: async (_sourcePath, temporaryPath, content) => {
+          await writeFile(temporaryPath, content)
+          await writeFile(filePath, 'external during save')
+        },
+      }),
+    ).rejects.toThrow('document changed')
+
+    expect(await readFile(filePath, 'utf8')).toBe('external during save')
+    expect(await readdir(directory)).toEqual(['note.md'])
+  })
+
   it('keeps symbolic links intact while replacing their target contents', async () => {
     const directory = await makeTemporaryDirectory()
     const targetPath = path.join(directory, 'target.md')

@@ -30,6 +30,11 @@ import {
   resolveWriteDestination,
   resolveWriteQueueKey,
 } from './atomicWriteFile'
+import {
+  createDocumentRevision,
+  writeFileIfUnchanged,
+} from './documentRevision'
+import { resolveAvailableCopyPath } from './savePath'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
@@ -77,6 +82,7 @@ async function readDocument(filePath: string): Promise<LineDocument> {
     name: path.basename(normalizedPath),
     content,
     modifiedAt: fileStats.mtime.toISOString(),
+    revision: createDocumentRevision(content),
   }
 }
 
@@ -87,6 +93,7 @@ function createBlankDocument(): LineDocument {
     name: 'Untitled.md',
     content: '',
     modifiedAt: null,
+    revision: createDocumentRevision(''),
   }
 }
 
@@ -135,6 +142,7 @@ async function openDocuments(
 async function saveDocument(input: SaveFileInput): Promise<LineDocument> {
   assertString(input?.path, 'path')
   assertString(input?.content, 'content')
+  assertString(input?.expectedRevision, 'expectedRevision')
 
   const normalizedPath = normalizePath(input.path)
   assertSupportedPath(normalizedPath)
@@ -143,19 +151,35 @@ async function saveDocument(input: SaveFileInput): Promise<LineDocument> {
     throw new Error('Save access has not been granted for this file.')
   }
 
-  return writeDocument(normalizedPath, input.content)
+  return writeDocument(
+    normalizedPath,
+    input.content,
+    input.expectedRevision,
+  )
 }
 
 async function writeDocument(
   normalizedPath: string,
   content: string,
+  expectedRevision?: string,
 ): Promise<LineDocument> {
   const destination = await resolveWriteDestination(normalizedPath)
   const queueKey = await resolveWriteQueueKey(destination)
 
   return documentSaveQueue.run(queueKey, async () => {
-    await atomicWriteFile(destination, content)
-    return readDocument(normalizedPath)
+    let writtenRevision: string
+    if (expectedRevision === undefined) {
+      await atomicWriteFile(destination, content)
+      writtenRevision = createDocumentRevision(content)
+    } else {
+      writtenRevision = await writeFileIfUnchanged(
+        destination,
+        content,
+        expectedRevision,
+      )
+    }
+    const savedDocument = await readDocument(normalizedPath)
+    return { ...savedDocument, revision: writtenRevision }
   })
 }
 
@@ -180,10 +204,11 @@ async function saveDocumentAs(
     typeof input.currentPath === 'string'
       ? normalizePath(input.currentPath)
       : null
-  const defaultPath =
-    normalizedCurrentPath && grantedPaths.has(normalizedCurrentPath)
-      ? normalizedCurrentPath
-      : path.join(app.getPath('documents'), suggestedName)
+  const defaultPath = normalizedCurrentPath && grantedPaths.has(normalizedCurrentPath)
+    ? input.saveCopy
+      ? await resolveAvailableCopyPath(normalizedCurrentPath, suggestedName)
+      : normalizedCurrentPath
+    : path.join(app.getPath('documents'), suggestedName)
 
   const result = await showSaveDialog({
     title: 'Save Document',

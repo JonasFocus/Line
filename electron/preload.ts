@@ -51,10 +51,20 @@ const api: LineApi = Object.freeze({
   saveFile,
   saveFileAs,
   saveDocument: (
-    input: SaveFileAsInput & { path?: string | null },
+    input: SaveFileAsInput & {
+      path?: string | null
+      expectedRevision?: string | null
+    },
   ) => {
     if (input.path) {
-      return saveFile({ path: input.path, content: input.content })
+      if (typeof input.expectedRevision !== 'string') {
+        throw new TypeError('expectedRevision must be a string.')
+      }
+      return saveFile({
+        path: input.path,
+        content: input.content,
+        expectedRevision: input.expectedRevision,
+      })
     }
 
     return saveFileAs(input)
