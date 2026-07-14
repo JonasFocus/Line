@@ -4,20 +4,9 @@ import { extractOutline, MarkdownPreview, type OutlineItem } from './components/
 import { seedDocuments as coreSeedDocuments, seedFolders } from './data'
 import { parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
+import type { LineDocument } from './lineDocument'
+import { LIBRARY_STORAGE_KEY, loadPersistedDocuments } from './persistedLibrary'
 import { resolveSelectionAfterDocumentsChange, resolveVisibleSelection } from './selection'
-
-export interface LineDocument {
-  id: string
-  title: string
-  content: string
-  folder: string
-  tags: string[]
-  favorite: boolean
-  updatedAt: string
-  path: string | null
-  revision: string | null
-  dirty?: boolean
-}
 
 type EditorMode = 'edit' | 'split' | 'preview'
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
@@ -65,23 +54,13 @@ function isDocument(value: unknown): value is LineDocument {
   return typeof item.id === 'string' && typeof item.title === 'string' && typeof item.content === 'string'
 }
 
-const STORAGE_KEY = 'line.library.v1'
 const DOCUMENT_CONFLICT_MESSAGE =
   'This document changed on disk. Use Save As to keep your version without overwriting the external changes.'
 const ATOMIC_SAVE_UNAVAILABLE_MESSAGE =
   'This document cannot be safely saved at its current location. Use Save As to keep your version.'
 
 function readPersistedDocuments(): LineDocument[] {
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY)
-    if (!stored) return seedDocuments
-    const parsed: unknown = JSON.parse(stored)
-    if (!Array.isArray(parsed)) return seedDocuments
-    const restored = parsed.filter(isDocument).map((document) => ({ ...document, path: null }))
-    return restored.length ? restored : seedDocuments
-  } catch {
-    return seedDocuments
-  }
+  return loadPersistedDocuments(() => window.localStorage, seedDocuments)
 }
 
 function normalizeImported(value: unknown): LineDocument | null {
@@ -614,7 +593,7 @@ export default function App() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       try {
-        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(documents.map((document) => ({ ...document, path: null }))))
+        window.localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(documents.map((document) => ({ ...document, path: null }))))
       } catch {
         // The editor remains fully usable if browser storage is unavailable.
       }
