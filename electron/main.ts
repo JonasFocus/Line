@@ -24,12 +24,14 @@ import {
   type SaveFileInput,
 } from './types'
 import { ExternalFileQueue } from './externalFileQueue'
+import { KeyedTaskQueue } from './keyedTaskQueue'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 const SUPPORTED_EXTENSIONS = new Set(['.md', '.markdown', '.txt'])
 const grantedPaths = new Set<string>()
 const externalFileQueue = new ExternalFileQueue()
+const documentSaveQueue = new KeyedTaskQueue()
 
 let mainWindow: BrowserWindow | null = null
 
@@ -136,8 +138,17 @@ async function saveDocument(input: SaveFileInput): Promise<LineDocument> {
     throw new Error('Save access has not been granted for this file.')
   }
 
-  await writeFile(normalizedPath, input.content, 'utf8')
-  return readDocument(normalizedPath)
+  return writeDocument(normalizedPath, input.content)
+}
+
+function writeDocument(
+  normalizedPath: string,
+  content: string,
+): Promise<LineDocument> {
+  return documentSaveQueue.run(normalizedPath, async () => {
+    await writeFile(normalizedPath, content, 'utf8')
+    return readDocument(normalizedPath)
+  })
 }
 
 function safeSuggestedName(suggestedName: unknown): string {
@@ -184,8 +195,7 @@ async function saveDocumentAs(
   const normalizedPath = normalizePath(result.filePath)
   assertSupportedPath(normalizedPath)
   grantedPaths.add(normalizedPath)
-  await writeFile(normalizedPath, input.content, 'utf8')
-  return readDocument(normalizedPath)
+  return writeDocument(normalizedPath, input.content)
 }
 
 function sendMenuCommand(command: MenuCommand): void {
