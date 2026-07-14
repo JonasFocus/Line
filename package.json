@@ -1,0 +1,77 @@
+{
+  "name": "line",
+  "private": true,
+  "version": "0.1.0",
+  "description": "A focused macOS markdown editor.",
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "dev:web": "ELECTRON_STARTUP_PREVENT=1 vite",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "typecheck": "tsc -b",
+    "preview": "vite preview",
+    "start": "electron .",
+    "dist": "npm run build && electron-builder --mac dmg zip"
+  },
+  "dependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.3",
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3",
+    "typescript": "^7.0.2",
+    "vite": "^8.1.4",
+    "vite-plugin-electron": "^1.1.0",
+    "vitest": "^4.1.10"
+  },
+  "build": {
+    "appId": "so.line.editor",
+    "productName": "Line",
+    "asar": true,
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json"
+    ],
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.productivity",
+      "hardenedRuntime": true,
+      "gatekeeperAssess": false,
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "dmg": {
+      "sign": false
+    },
+    "fileAssociations": [
+      {
+        "ext": [
+          "md",
+          "markdown"
+        ],
+        "name": "Markdown Document",
+        "role": "Editor"
+      },
+      {
+        "ext": "txt",
+        "name": "Text Document",
+        "role": "Editor"
+      }
+    ],
+    "artifactName": "${productName}-${version}-${arch}.${ext}"
+  }
+}
