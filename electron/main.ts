@@ -11,7 +11,7 @@ import {
   type SaveDialogOptions,
 } from 'electron'
 import { randomUUID } from 'node:crypto'
-import { readFile, stat, writeFile } from 'node:fs/promises'
+import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import {
@@ -25,6 +25,11 @@ import {
 } from './types'
 import { ExternalFileQueue } from './externalFileQueue'
 import { KeyedTaskQueue } from './keyedTaskQueue'
+import {
+  atomicWriteFile,
+  resolveWriteDestination,
+  resolveWriteQueueKey,
+} from './atomicWriteFile'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
@@ -141,12 +146,15 @@ async function saveDocument(input: SaveFileInput): Promise<LineDocument> {
   return writeDocument(normalizedPath, input.content)
 }
 
-function writeDocument(
+async function writeDocument(
   normalizedPath: string,
   content: string,
 ): Promise<LineDocument> {
-  return documentSaveQueue.run(normalizedPath, async () => {
-    await writeFile(normalizedPath, content, 'utf8')
+  const destination = await resolveWriteDestination(normalizedPath)
+  const queueKey = await resolveWriteQueueKey(destination)
+
+  return documentSaveQueue.run(queueKey, async () => {
+    await atomicWriteFile(destination, content)
     return readDocument(normalizedPath)
   })
 }
