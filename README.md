@@ -1,37 +1,36 @@
-# Line
+<p align="center">
+  <img src="build/icon.svg" width="88" alt="Line app icon">
+</p>
 
-Line is a focused macOS Markdown editor built with Electron, React, TypeScript, and Vite.
+<h1 align="center">Line</h1>
 
-## MVP features
+<p align="center">
+  A calm Markdown workspace for macOS.
+</p>
 
-- Four-pane library, document list, editor, and outline layout
-- Create, import, edit, save, and Save As for `.md`, `.markdown`, and `.txt` files
-- Editor, split, and rendered preview modes
-- Full-library search, folder filters, tags, and starred documents
-- Live heading outline with click-to-navigate behavior
-- Local recovery for in-progress edits
-- Native macOS menu commands and keyboard shortcuts
-- Secure context-isolated Electron file bridge
+![Line editor](qa/line-final-reviewed.png)
 
-## Development
+## Stay in flow
+
+- Write in editor, split, or preview mode.
+- Organize with folders, tags, stars, search, and a live outline.
+- Keep work safe with local recovery and conflict-aware saves.
+
+## Run locally
 
 ```bash
 npm install
 npm run dev
 ```
 
-Useful checks:
-
 ```bash
-npm run typecheck
 npm test
+npm run typecheck
 npm run build
 ```
 
-## Package for macOS
+Build the macOS app with `npm run dist`.
 
-```bash
-npm run dist
-```
-
-The DMG, ZIP, and unpacked application are written to `release/`. Public distribution still requires a Developer ID Application certificate and Apple notarization.
+<p align="center">
+  <sub>Electron · React · TypeScript · Vite</sub>
+</p>
