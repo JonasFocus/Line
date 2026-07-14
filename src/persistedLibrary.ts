@@ -3,6 +3,25 @@ import type { LineDocument } from './lineDocument'
 
 export const LIBRARY_STORAGE_KEY = 'line.library.v1'
 
+const LEGACY_DEMO_DOCUMENT_IDS = new Set([
+  'dark-matter-dark-energy',
+  'incomplete-guide-universe',
+  'crispr-revolution',
+  'evolution-four-billion-years',
+  'string-theory',
+  'fermi-paradox',
+  'hard-problem-consciousness',
+  'multiverse',
+  'line-macos-guide',
+  'beta-review-notes',
+  'testflight-release-checklist',
+  'notes-better-writing',
+])
+
+export function removeLegacyDemoDocuments(documents: readonly LineDocument[]): LineDocument[] {
+  return documents.filter((document) => !LEGACY_DEMO_DOCUMENT_IDS.has(document.id))
+}
+
 function normalizeDocument(value: unknown): LineDocument | null {
   if (!value || typeof value !== 'object') return null
 
@@ -19,7 +38,7 @@ function normalizeDocument(value: unknown): LineDocument | null {
     id: item.id,
     title: typeof item.title === 'string' ? item.title : getMetadata().title,
     content: item.content,
-    folder: typeof item.folder === 'string' && item.folder.trim() ? item.folder : 'Basics',
+    folder: typeof item.folder === 'string' && item.folder.trim() ? item.folder : 'Documents',
     tags: Array.isArray(item.tags)
       ? item.tags.filter((tag): tag is string => typeof tag === 'string')
       : getMetadata().tags,

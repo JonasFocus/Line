@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 
-import { seedDocuments, seedFolders, seedTags } from "../src/data";
 import {
   countWords,
   createDocumentFromMarkdown,
@@ -109,7 +108,7 @@ const answer = 42 < 100;
   });
 });
 
-describe("Document model and seed library", () => {
+describe("Document model", () => {
   it("creates a document with derived metadata and explicit overrides", () => {
     const document = createDocumentFromMarkdown({
       id: "draft",
@@ -126,14 +125,4 @@ describe("Document model and seed library", () => {
     expect(document.wordCount).toBeGreaterThan(0);
   });
 
-  it("ships a realistic, internally consistent starter library", () => {
-    expect(seedFolders.map((folder) => folder.name)).toEqual(
-      expect.arrayContaining(["Basics", "Documentation", "Reviews", "TestFlight", "Archive", "Work"]),
-    );
-    expect(seedDocuments.length).toBeGreaterThanOrEqual(10);
-    expect(seedDocuments.find((document) => document.id === "dark-matter-dark-energy")?.headings.length)
-      .toBeGreaterThanOrEqual(10);
-    expect(seedDocuments.filter((document) => document.isStarred).length).toBeGreaterThanOrEqual(4);
-    expect(seedTags).toEqual(expect.arrayContaining(["world", "mind", "quantum"]));
-  });
 });

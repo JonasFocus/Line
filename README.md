@@ -13,7 +13,7 @@
 ## Stay in flow
 
 - Write in editor, split, or preview mode.
-- Organize with folders, tags, stars, search, and a live outline.
+- Find work with search, tags, stars, and a live outline.
 - Keep work safe with local recovery and conflict-aware saves.
 
 ## Run locally
@@ -29,7 +29,7 @@ npm run typecheck
 npm run build
 ```
 
-Build the macOS app with `npm run dist`.
+Build the macOS app with `npm run dist`. Installers are written to `builds/`.
 
 <p align="center">
   <sub>Electron · React · TypeScript · Vite</sub>

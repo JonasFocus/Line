@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, type IconName } from './components/Icon'
 import { extractOutline, MarkdownPreview, type OutlineItem } from './components/MarkdownPreview'
-import { seedDocuments as coreSeedDocuments, seedFolders } from './data'
 import { parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
 import type { LineDocument } from './lineDocument'
-import { loadPersistedDocuments, savePersistedDocuments } from './persistedLibrary'
+import { loadPersistedDocuments, removeLegacyDemoDocuments, savePersistedDocuments } from './persistedLibrary'
 import { resolveSelectionAfterDocumentsChange, resolveVisibleSelection } from './selection'
 import { saveDocumentsBeforeClose } from './saveBeforeClose'
 
@@ -18,34 +17,11 @@ type SaveRequest = {
   saveCopy: boolean
 }
 
-const folderNameById = new Map(seedFolders.map((folder) => [folder.id, folder.name]))
-
 function formatDate(value: string | null | undefined) {
   if (!value) return 'Just now'
   const date = new Date(value)
   return Number.isNaN(date.getTime()) ? value : new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
 }
-
-const seedDocuments: LineDocument[] = coreSeedDocuments.map((document) => ({
-  id: document.id,
-  title: document.title,
-  content: document.content,
-  folder: folderNameById.get(document.folderId) || 'Basics',
-  tags: document.tags,
-  favorite: document.isStarred,
-  updatedAt: formatDate(document.updatedAt),
-  path: null,
-  revision: null,
-}))
-
-const folders = seedFolders
-  .filter((folder) => !folder.system)
-  .map((folder) => ({
-    name: folder.name,
-    count: coreSeedDocuments.filter((document) => document.folderId === folder.id || seedFolders.find((child) => child.id === document.folderId)?.parentId === folder.id).length,
-    nested: folder.name === 'TestFlight' || folder.name === 'Work',
-    indent: Boolean(folder.parentId),
-  }))
 
 const lineApi = () => typeof window !== 'undefined' ? window.line : undefined
 
@@ -61,7 +37,7 @@ const ATOMIC_SAVE_UNAVAILABLE_MESSAGE =
   'This document cannot be safely saved at its current location. Use Save As to keep your version.'
 
 function readPersistedDocuments(): LineDocument[] {
-  return loadPersistedDocuments(() => window.localStorage, seedDocuments)
+  return removeLegacyDemoDocuments(loadPersistedDocuments(() => window.localStorage, []))
 }
 
 function normalizeImported(value: unknown): LineDocument | null {
@@ -77,7 +53,7 @@ function normalizeImported(value: unknown): LineDocument | null {
     id: typeof item.id === 'string' ? item.id : `import-${Date.now()}`,
     title,
     content: item.content,
-    folder: typeof item.folder === 'string' ? item.folder : 'Basics',
+    folder: typeof item.folder === 'string' ? item.folder : 'Documents',
     tags: Array.isArray(item.tags) ? item.tags.filter((tag): tag is string => typeof tag === 'string') : metadata.tags,
     favorite: Boolean(item.favorite),
     updatedAt: formatDate(typeof item.updatedAt === 'string' ? item.updatedAt : typeof item.modifiedAt === 'string' ? item.modifiedAt : null),
@@ -136,45 +112,34 @@ function Sidebar({ documents, activeFilter, activeTag, onFilter, onTag, onOpenFo
       </header>
 
       <div className="sidebar-scroll">
-        <section className="nav-section">
-          <p className="section-label">Starred</p>
-          {favorites.map((doc) => (
+        {favorites.length > 0 && (
+          <section className="nav-section">
+            <p className="section-label">Starred</p>
+            {favorites.map((doc) => (
             <button className="nav-row starred-row" key={doc.id} onClick={() => onFilter(`doc:${doc.id}`)} type="button">
               <Icon filled name="star" size={16} />
               <span>{doc.title}</span>
             </button>
-          ))}
-        </section>
+            ))}
+          </section>
+        )}
 
         <section className="nav-section">
           <p className="section-label">Documents</p>
           <button className={`nav-row ${activeFilter === 'all' ? 'selected' : ''}`} onClick={() => onFilter('all')} type="button">
-            <span className="chevron-spacer" /><Icon name="grid" size={16} /><span>All Documents</span>
-          </button>
-          {folders.map((folder) => (
-            <button
-              className={`nav-row ${folder.indent ? 'is-indented' : ''} ${activeFilter === folder.name ? 'selected' : ''}`}
-              key={folder.name}
-              onClick={() => onFilter(folder.name)}
-              type="button"
-            >
-              {folder.nested ? <Icon name="chevronRight" size={13} /> : <span className="chevron-spacer" />}
-              <Icon name={folder.name === 'Archive' ? 'archive' : 'folder'} size={17} />
-              <span>{folder.name}</span><small>{folder.count}</small>
-            </button>
-          ))}
-          <button className={`nav-row ${activeFilter === 'trash' ? 'selected' : ''}`} onClick={() => onFilter('trash')} type="button">
-            <span className="chevron-spacer" /><Icon name="trash" size={17} /><span>Recently Deleted</span><small>14</small>
+            <span className="chevron-spacer" /><Icon name="grid" size={16} /><span>All Documents</span><small>{documents.length}</small>
           </button>
         </section>
 
-        <section className="nav-section tag-section">
-          <p className="section-label">Tags</p>
-          <div className="tag-cloud">
-            <button className={!activeTag ? 'selected-tag' : ''} onClick={() => onTag(null)} type="button">All Tags</button>
-            {tags.map((tag) => <button className={activeTag === tag ? 'selected-tag' : ''} key={tag} onClick={() => onTag(tag)} type="button">#{tag}</button>)}
-          </div>
-        </section>
+        {tags.length > 0 && (
+          <section className="nav-section tag-section">
+            <p className="section-label">Tags</p>
+            <div className="tag-cloud">
+              <button className={!activeTag ? 'selected-tag' : ''} onClick={() => onTag(null)} type="button">All Tags</button>
+              {tags.map((tag) => <button className={activeTag === tag ? 'selected-tag' : ''} key={tag} onClick={() => onTag(tag)} type="button">#{tag}</button>)}
+            </div>
+          </section>
+        )}
       </div>
     </aside>
   )
@@ -234,9 +199,9 @@ function DocumentList({ documents, selectedId, search, onSearch, onSelect, onFav
         )) : (
           <div className="empty-state">
             <span className="empty-icon"><Icon name="document" size={22} /></span>
-            <strong>No notes found</strong>
-            <p>Try a different folder or search, or create a new document.</p>
-            <button onClick={onNew} type="button">New document</button>
+            <strong>{search ? 'No matching files' : 'No Markdown files yet'}</strong>
+            <p>{search ? 'Try another search.' : 'Create a blank file or open Markdown from your Mac.'}</p>
+            {!search && <div className="empty-actions"><button onClick={onNew} type="button">Create file</button><button onClick={onImport} type="button">Open file</button></div>}
           </div>
         )}
       </div>
@@ -253,7 +218,7 @@ function ModeControl({ mode, onMode }: { mode: EditorMode; onMode: (mode: Editor
   return <div className="segmented mode-control">{modes.map((item) => <PlainButton active={mode === item.mode} icon={item.icon} key={item.mode} label={item.label} onClick={() => onMode(item.mode)} />)}</div>
 }
 
-function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, onMode, onSave, inspectorOpen, onInspector }: {
+function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, onMode, onSave, onNew, onOpen, inspectorOpen, onInspector }: {
   document: LineDocument | null
   mode: EditorMode
   saveState: SaveState
@@ -261,6 +226,8 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
   onDocumentChange: (change: Partial<LineDocument>) => void
   onMode: (mode: EditorMode) => void
   onSave: () => void
+  onNew: () => void
+  onOpen: () => void
   inspectorOpen: boolean
   onInspector: () => void
 }) {
@@ -292,6 +259,7 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
                 aria-label="Markdown editor"
                 className="markdown-source"
                 onChange={(event) => onDocumentChange({ content: event.target.value })}
+                placeholder={'# Your title\n\nStart writing in Markdown…'}
                 ref={textareaRef}
                 spellCheck
                 value={document.content}
@@ -304,8 +272,14 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
       ) : (
         <div className="workspace-empty">
           <span><Icon name="edit" size={28} /></span>
-          <h2>Space to think, space to write</h2>
-          <p>Select a note from your library or start with a blank page.</p>
+          <p className="workspace-kicker">LINE FOR MARKDOWN</p>
+          <h2>Write something worth keeping.</h2>
+          <p>Create a clean Markdown file or open one already on your Mac.</p>
+          <div className="workspace-empty-actions">
+            <button className="primary" onClick={onNew} type="button"><Icon name="newDocument" size={16} />Create Markdown</button>
+            <button onClick={onOpen} type="button"><Icon name="import" size={16} />Open file</button>
+          </div>
+          <small>Markdown, plain text, and nothing in the way.</small>
         </div>
       )}
     </main>
@@ -357,12 +331,12 @@ function Inspector({ document, outline, activeId, search, onSearch, onNavigate, 
 export default function App() {
   const [documents, setDocuments] = useState<LineDocument[]>(readPersistedDocuments)
   const [selectedId, setSelectedId] = useState<string | null>(() => readPersistedDocuments()[0]?.id || null)
-  const [activeFilter, setActiveFilter] = useState('Basics')
+  const [activeFilter, setActiveFilter] = useState('all')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [outlineSearch, setOutlineSearch] = useState('')
   const [mode, setMode] = useState<EditorMode>('edit')
-  const [inspectorOpen, setInspectorOpen] = useState(true)
+  const [inspectorOpen, setInspectorOpen] = useState(false)
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -412,9 +386,7 @@ export default function App() {
   const filteredDocuments = useMemo(() => {
     const query = search.trim().toLowerCase()
     return documents.filter((document) => {
-      if (activeFilter === 'trash') return false
       if (activeFilter.startsWith('doc:') && document.id !== activeFilter.slice(4)) return false
-      if (!['all', 'trash'].includes(activeFilter) && !activeFilter.startsWith('doc:') && document.folder !== activeFilter) return false
       if (activeTag && !document.tags.includes(activeTag)) return false
       if (!query) return true
       return `${document.title} ${document.content} ${document.tags.join(' ')}`.toLowerCase().includes(query)
@@ -452,8 +424,8 @@ export default function App() {
     const draft: LineDocument = {
       id: `note-${Date.now()}`,
       title: 'Untitled',
-      content: '# Untitled\n\nStart writing here.',
-      folder: activeFilter !== 'all' && !activeFilter.startsWith('doc:') && activeFilter !== 'trash' ? activeFilter : 'Basics',
+      content: '',
+      folder: 'Documents',
       tags: [],
       favorite: false,
       updatedAt: 'Just now',
@@ -478,7 +450,7 @@ export default function App() {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not create the document.')
     }
-  }, [activeFilter])
+  }, [])
 
   const importDocument = useCallback(async () => {
     if (closeReadyRef.current) return
@@ -792,6 +764,8 @@ export default function App() {
         onDocumentChange={updateDocument}
         onInspector={() => setInspectorOpen((current) => !current)}
         onMode={setMode}
+        onNew={createDocument}
+        onOpen={importDocument}
         onSave={() => void saveDocument()}
         saveState={saveState}
         textareaRef={textareaRef}

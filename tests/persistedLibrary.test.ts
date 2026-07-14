@@ -4,6 +4,7 @@ import type { LineDocument } from '../src/lineDocument'
 import {
   LIBRARY_STORAGE_KEY,
   loadPersistedDocuments,
+  removeLegacyDemoDocuments,
   restorePersistedDocuments,
   savePersistedDocuments,
 } from '../src/persistedLibrary'
@@ -53,7 +54,7 @@ describe('restorePersistedDocuments', () => {
       id: 'legacy',
       title: 'Recovered title',
       content: '# Recovered title\n\nKeep this draft. #important',
-      folder: 'Basics',
+      folder: 'Documents',
       tags: ['important'],
       favorite: false,
       updatedAt: 'Just now',
@@ -78,7 +79,7 @@ describe('restorePersistedDocuments', () => {
 
     expect(restored[0]).toMatchObject({
       title: 'Plain text',
-      folder: 'Basics',
+      folder: 'Documents',
       tags: [],
       favorite: false,
       updatedAt: 'Just now',
@@ -163,6 +164,15 @@ describe('loadPersistedDocuments', () => {
     }
 
     expect(loadPersistedDocuments(() => storage, [fallback])[0].id).toBe('stored')
+  })
+})
+
+describe('removeLegacyDemoDocuments', () => {
+  it('removes the old bundled demo library without touching real documents', () => {
+    const demo = { ...fallback, id: 'dark-matter-dark-energy' }
+    const realDocument = { ...fallback, id: 'my-draft', title: 'My draft' }
+
+    expect(removeLegacyDemoDocuments([demo, realDocument])).toEqual([realDocument])
   })
 })
 
