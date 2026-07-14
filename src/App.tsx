@@ -3,6 +3,7 @@ import { Icon, type IconName } from './components/Icon'
 import { extractOutline, MarkdownPreview, type OutlineItem } from './components/MarkdownPreview'
 import { seedDocuments as coreSeedDocuments, seedFolders } from './data'
 import { parseMarkdownMetadata } from './lib'
+import { resolveSelectionAfterDocumentsChange, resolveVisibleSelection } from './selection'
 
 export interface LineDocument {
   id: string
@@ -420,6 +421,16 @@ export default function App() {
     })
   }, [documents, activeFilter, activeTag, search])
 
+  const synchronizeSelection = useCallback((nextSelectedId: string | null) => {
+    if (nextSelectedId === selectedIdRef.current) return
+
+    const nextDocument = documentsRef.current.find((document) => document.id === nextSelectedId)
+    selectedIdRef.current = nextSelectedId
+    setSelectedId(nextSelectedId)
+    setSaveState(nextDocument?.dirty ? 'dirty' : 'idle')
+    setActiveOutlineId(null)
+  }, [])
+
   const updateDocument = useCallback((change: Partial<LineDocument>) => {
     if (!selectedId) return
     const metadata = typeof change.content === 'string' ? parseMarkdownMetadata(change.content) : null
@@ -611,10 +622,23 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (selectedId && !documents.some((document) => document.id === selectedId)) {
-      setSelectedId(filteredDocuments[0]?.id || null)
-    }
-  }, [documents, filteredDocuments, selectedId])
+    const nextSelectedId = resolveVisibleSelection(
+      selectedIdRef.current,
+      filteredDocuments.map((document) => document.id),
+    )
+    synchronizeSelection(nextSelectedId)
+    // Document edits can change search and tag membership while the user types.
+    // Reconcile here only when navigation controls change.
+  }, [activeFilter, activeTag, search, synchronizeSelection])
+
+  useEffect(() => {
+    const nextSelectedId = resolveSelectionAfterDocumentsChange(
+      selectedIdRef.current,
+      documents.map((document) => document.id),
+      filteredDocuments.map((document) => document.id),
+    )
+    synchronizeSelection(nextSelectedId)
+  }, [documents, synchronizeSelection])
 
   return (
     <div className={`app-shell ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'}`}>
@@ -624,8 +648,10 @@ export default function App() {
         documents={documents}
         onFilter={(filter) => {
           if (filter.startsWith('doc:')) {
-            setSelectedId(filter.slice(4))
+            synchronizeSelection(filter.slice(4))
             setActiveFilter('all')
+            setActiveTag(null)
+            setSearch('')
           } else {
             setActiveFilter(filter)
           }
@@ -639,7 +665,7 @@ export default function App() {
         onImport={importDocument}
         onNew={createDocument}
         onSearch={setSearch}
-        onSelect={(id) => { setSelectedId(id); setSaveState(documents.find((document) => document.id === id)?.dirty ? 'dirty' : 'idle'); setActiveOutlineId(null) }}
+        onSelect={synchronizeSelection}
         search={search}
         selectedId={selectedId}
       />
