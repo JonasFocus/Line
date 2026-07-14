@@ -2,7 +2,7 @@
   "name": "line",
   "productName": "Line",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A focused macOS markdown editor.",
   "type": "module",
   "main": "dist-electron/main.js",
@@ -37,7 +37,7 @@
     "productName": "Line",
     "asar": true,
     "directories": {
-      "output": "release",
+      "output": "builds",
       "buildResources": "build"
     },
     "files": [
