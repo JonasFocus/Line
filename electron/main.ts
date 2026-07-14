@@ -529,6 +529,9 @@ function createWindow(): BrowserWindow {
 }
 
 app.setName('Line')
+if (process.platform === 'darwin' && !app.isPackaged) {
+  process.title = 'Line'
+}
 
 app.on('before-quit', () => {
   quitRequested = true
