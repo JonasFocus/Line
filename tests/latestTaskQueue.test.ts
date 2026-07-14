@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { LatestTaskQueue } from '../src/latestTaskQueue'
 
@@ -39,6 +39,27 @@ describe('LatestTaskQueue', () => {
     await first
 
     expect(saved).toEqual(['opened:first', 'saved-first:latest'])
+  })
+
+  it('resolves idle waiters after queued work finishes', async () => {
+    const queue = new LatestTaskQueue<number>()
+    let release: (() => void) | undefined
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const task = vi.fn(async () => {
+      await gate
+      return { continueWithPending: true }
+    })
+
+    const running = queue.run('document', 1, task)
+    let idle = false
+    const waiting = queue.waitForIdle('document').then(() => { idle = true })
+    await Promise.resolve()
+    expect(idle).toBe(false)
+
+    release?.()
+    await running
+    await waiting
+    expect(idle).toBe(true)
   })
 
   it('discards pending work when the active task cannot continue', async () => {

@@ -5,8 +5,9 @@ import { seedDocuments as coreSeedDocuments, seedFolders } from './data'
 import { parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
 import type { LineDocument } from './lineDocument'
-import { LIBRARY_STORAGE_KEY, loadPersistedDocuments } from './persistedLibrary'
+import { loadPersistedDocuments, savePersistedDocuments } from './persistedLibrary'
 import { resolveSelectionAfterDocumentsChange, resolveVisibleSelection } from './selection'
+import { saveDocumentsBeforeClose } from './saveBeforeClose'
 
 type EditorMode = 'edit' | 'split' | 'preview'
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
@@ -370,6 +371,7 @@ export default function App() {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const toastTimer = useRef<number | null>(null)
   const saveQueueRef = useRef(new LatestTaskQueue<SaveRequest>())
+  const closeReadyRef = useRef(false)
   const externalFilesReadyRef = useRef(false)
   const documentsRef = useRef(documents)
   const selectedIdRef = useRef(selectedId)
@@ -387,11 +389,14 @@ export default function App() {
   }, [])
 
   const acceptExternalDocuments = useCallback((externalDocuments: unknown[]) => {
+    if (closeReadyRef.current) return
     const opened = externalDocuments.map(normalizeImported).filter((document): document is LineDocument => document !== null)
     if (!opened.length) return
     const { documents: safeOpened, protectedCount } = reconcileOpenedDocuments(documentsRef.current, opened)
     const openedIds = new Set(safeOpened.map((document) => document.id))
-    setDocuments((current) => [...safeOpened, ...current.filter((document) => !openedIds.has(document.id))])
+    const nextDocuments = [...safeOpened, ...documentsRef.current.filter((document) => !openedIds.has(document.id))]
+    documentsRef.current = nextDocuments
+    setDocuments(nextDocuments)
     setSelectedId(safeOpened[0].id)
     setError(null)
     setSaveState(safeOpened[0].dirty ? 'dirty' : 'idle')
@@ -428,19 +433,22 @@ export default function App() {
   }, [])
 
   const updateDocument = useCallback((change: Partial<LineDocument>) => {
-    if (!selectedId) return
+    if (!selectedId || closeReadyRef.current) return
     const metadata = typeof change.content === 'string' ? parseMarkdownMetadata(change.content) : null
-    setDocuments((current) => current.map((document) => document.id === selectedId ? {
+    const nextDocuments = documentsRef.current.map((document) => document.id === selectedId ? {
       ...document,
       ...change,
       ...(metadata ? { title: metadata.title, tags: metadata.tags } : {}),
       dirty: true,
       updatedAt: 'Just now',
-    } : document))
+    } : document)
+    documentsRef.current = nextDocuments
+    setDocuments(nextDocuments)
     setSaveState('dirty')
   }, [selectedId])
 
   const createDocument = useCallback(async () => {
+    if (closeReadyRef.current) return
     const draft: LineDocument = {
       id: `note-${Date.now()}`,
       title: 'Untitled',
@@ -457,7 +465,9 @@ export default function App() {
       const result = await lineApi()?.createBlankDocument?.()
       const shellDocument = normalizeImported(result)
       const created = shellDocument ? { ...draft, id: shellDocument.id, path: shellDocument.path } : draft
-      setDocuments((current) => [created, ...current])
+      const nextDocuments = [created, ...documentsRef.current]
+      documentsRef.current = nextDocuments
+      setDocuments(nextDocuments)
       setSelectedId(created.id)
       setError(null)
       setActiveFilter('all')
@@ -471,6 +481,7 @@ export default function App() {
   }, [activeFilter])
 
   const importDocument = useCallback(async () => {
+    if (closeReadyRef.current) return
     const api = lineApi()
     if (!api?.openFiles && !api?.importMarkdown) {
       showToast('Import is available in the desktop app')
@@ -483,7 +494,9 @@ export default function App() {
       if (!imported.length) return
       const { documents: safeImported, protectedCount } = reconcileOpenedDocuments(documentsRef.current, imported)
       const importedIds = new Set(safeImported.map((document) => document.id))
-      setDocuments((current) => [...safeImported, ...current.filter((document) => !importedIds.has(document.id))])
+      const nextDocuments = [...safeImported, ...documentsRef.current.filter((document) => !importedIds.has(document.id))]
+      documentsRef.current = nextDocuments
+      setDocuments(nextDocuments)
       setSelectedId(safeImported[0].id)
       setError(null)
       setActiveFilter('all')
@@ -501,16 +514,12 @@ export default function App() {
     }
   }, [showToast])
 
-  const saveDocument = useCallback(async (saveAs = false, saveCopy = false, defaultToDocuments = false) => {
-    if (!selectedDocument) return
-
-    const request = { defaultToDocuments, document: selectedDocument, saveAs, saveCopy }
-    await saveQueueRef.current.run(selectedDocument.id, request, async ({
+  const performSave = useCallback(async ({
       defaultToDocuments: requestedDocumentsDefault,
       document: documentToSave,
       saveAs: requestedSaveAs,
       saveCopy: requestedSaveCopy,
-    }) => {
+    }: SaveRequest) => {
       const submittedContent = documentToSave.content
       if (selectedIdRef.current === documentToSave.id) setSaveState('saving')
 
@@ -537,13 +546,15 @@ export default function App() {
         const saved = normalizeImported(result)
         const latestDocument = documentsRef.current.find((document) => document.id === documentToSave.id)
         const hasNewerChanges = latestDocument?.content !== submittedContent
-        setDocuments((current) => current.map((document) => document.id === documentToSave.id ? {
+        const nextDocuments = documentsRef.current.map((document) => document.id === documentToSave.id ? {
           ...document,
           path: saved?.path ?? document.path,
           revision: saved?.revision ?? document.revision,
           updatedAt: saved?.updatedAt ?? document.updatedAt,
           dirty: hasNewerChanges ? document.dirty : false,
-        } : document))
+        } : document)
+        documentsRef.current = nextDocuments
+        setDocuments(nextDocuments)
         if (selectedIdRef.current === documentToSave.id) {
           setSaveState(hasNewerChanges ? 'dirty' : 'saved')
         }
@@ -566,14 +577,29 @@ export default function App() {
           : message.includes('cannot be safely saved')
             ? ATOMIC_SAVE_UNAVAILABLE_MESSAGE
             : null
-        if (selectedIdRef.current === documentToSave.id) {
-          setSaveState(recoveryMessage ? 'dirty' : 'error')
-          setError(recoveryMessage || message || 'The document could not be saved.')
+        if (selectedIdRef.current !== documentToSave.id) {
+          selectedIdRef.current = documentToSave.id
+          setSelectedId(documentToSave.id)
+          setActiveFilter('all')
+          setActiveTag(null)
+          setSearch('')
         }
+        setSaveState(recoveryMessage ? 'dirty' : 'error')
+        setError(recoveryMessage || message || 'The document could not be saved.')
         return { continueWithPending: false }
       }
-    })
-  }, [selectedDocument, showToast])
+  }, [showToast])
+
+  const saveDocumentRequest = useCallback(async (request: SaveRequest) => {
+    await saveQueueRef.current.run(request.document.id, request, performSave)
+    await saveQueueRef.current.waitForIdle(request.document.id)
+    return documentsRef.current.find((document) => document.id === request.document.id)?.dirty !== true
+  }, [performSave])
+
+  const saveDocument = useCallback(async (saveAs = false, saveCopy = false, defaultToDocuments = false) => {
+    if (!selectedDocument) return false
+    return saveDocumentRequest({ defaultToDocuments, document: selectedDocument, saveAs, saveCopy })
+  }, [saveDocumentRequest, selectedDocument])
 
   const openFolder = importDocument
 
@@ -590,26 +616,74 @@ export default function App() {
     if (textareaRef.current) textareaRef.current.scrollTop = Math.max(0, item.line * 28 - 80)
   }, [mode, selectedDocument?.content])
 
+  const persistDocuments = useCallback((snapshot: readonly LineDocument[]) => {
+    return savePersistedDocuments(() => window.localStorage, snapshot)
+  }, [])
+
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      try {
-        window.localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(documents.map((document) => ({ ...document, path: null }))))
-      } catch {
-        // The editor remains fully usable if browser storage is unavailable.
-      }
-    }, 350)
+    const timer = window.setTimeout(() => persistDocuments(documents), 350)
     return () => window.clearTimeout(timer)
-  }, [documents])
+  }, [documents, persistDocuments])
 
   useEffect(() => {
     const warnAboutUnsavedChanges = (event: BeforeUnloadEvent) => {
-      if (!documents.some((document) => document.dirty)) return
+      const latestDocuments = documentsRef.current
+      persistDocuments(latestDocuments)
+      if (!latestDocuments.some((document) => document.dirty)) return
       event.preventDefault()
       event.returnValue = ''
     }
     window.addEventListener('beforeunload', warnAboutUnsavedChanges)
     return () => window.removeEventListener('beforeunload', warnAboutUnsavedChanges)
-  }, [documents])
+  }, [persistDocuments])
+
+  useEffect(() => {
+    const api = lineApi()
+    return api?.onPrepareClose?.((action) => {
+      const markReadyToClose = () => {
+        closeReadyRef.current = true
+        document.body.inert = true
+      }
+
+      if (action === 'preserve') {
+        const preserved = persistDocuments(documentsRef.current)
+        if (!preserved) {
+          setError('Line could not preserve your changes. Save them before closing.')
+        } else {
+          markReadyToClose()
+        }
+        api.finishPrepareClose(preserved)
+        return
+      }
+
+      const dirtyDocumentIds = documentsRef.current
+        .filter((document) => document.dirty)
+        .map((document) => document.id)
+
+      void saveDocumentsBeforeClose(dirtyDocumentIds, async (documentId) => {
+        const documentToSave = documentsRef.current.find((document) => document.id === documentId)
+        if (!documentToSave?.dirty) return true
+        return saveDocumentRequest({
+          defaultToDocuments: false,
+          document: documentToSave,
+          saveAs: false,
+          saveCopy: false,
+        })
+      }, () => {
+        const latestDocuments = documentsRef.current
+        if (latestDocuments.some((document) => document.dirty)) return false
+
+        const persisted = persistDocuments(latestDocuments)
+        if (!persisted) {
+          setError('Documents were saved, but Line could not update its library. Try closing again.')
+        } else {
+          markReadyToClose()
+        }
+        return persisted
+      }).then(api.finishPrepareClose)
+        .catch(() => api.finishPrepareClose(false))
+    })
+  }, [persistDocuments, saveDocumentRequest])
 
   useEffect(() => {
     const handleAction = (action: string) => {
@@ -698,7 +772,12 @@ export default function App() {
       />
       <DocumentList
         documents={filteredDocuments}
-        onFavorite={(id) => setDocuments((current) => current.map((document) => document.id === id ? { ...document, favorite: !document.favorite } : document))}
+        onFavorite={(id) => {
+          if (closeReadyRef.current) return
+          const nextDocuments = documentsRef.current.map((document) => document.id === id ? { ...document, favorite: !document.favorite } : document)
+          documentsRef.current = nextDocuments
+          setDocuments(nextDocuments)
+        }}
         onImport={importDocument}
         onNew={createDocument}
         onSearch={setSearch}

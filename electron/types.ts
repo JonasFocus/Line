@@ -7,9 +7,12 @@ export const IPC_CHANNELS = {
   rendererReady: 'line:app:renderer-ready',
   menuCommand: 'line:menu:command',
   externalFilesOpened: 'line:documents:external-files-opened',
+  prepareClose: 'line:app:prepare-close',
+  prepareCloseFinished: 'line:app:prepare-close-finished',
 } as const
 
 export type MenuCommand = 'new' | 'open' | 'save' | 'save-as'
+export type PrepareCloseAction = 'save' | 'preserve'
 
 export interface LineDocument {
   id: string
@@ -69,4 +72,6 @@ export interface LineApi {
   onExternalFilesOpened(
     callback: (documents: LineDocument[]) => void,
   ): () => void
+  onPrepareClose(callback: (action: PrepareCloseAction) => void): () => void
+  finishPrepareClose(success: boolean): void
 }

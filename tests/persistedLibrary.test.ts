@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import type { LineDocument } from '../src/lineDocument'
-import { LIBRARY_STORAGE_KEY, loadPersistedDocuments, restorePersistedDocuments } from '../src/persistedLibrary'
+import {
+  LIBRARY_STORAGE_KEY,
+  loadPersistedDocuments,
+  restorePersistedDocuments,
+  savePersistedDocuments,
+} from '../src/persistedLibrary'
 
 const fallback: LineDocument = {
   id: 'fallback',
@@ -158,5 +163,34 @@ describe('loadPersistedDocuments', () => {
     }
 
     expect(loadPersistedDocuments(() => storage, [fallback])[0].id).toBe('stored')
+  })
+})
+
+describe('savePersistedDocuments', () => {
+  it('stores the latest clean state without filesystem access', () => {
+    let storedKey = ''
+    let storedValue = ''
+    const document = { ...fallback, dirty: false, path: '/tmp/note.md' }
+
+    expect(savePersistedDocuments(() => ({
+      setItem: (key, value) => {
+        storedKey = key
+        storedValue = value
+      },
+    }), [document])).toBe(true)
+    expect(storedKey).toBe(LIBRARY_STORAGE_KEY)
+    expect(JSON.parse(storedValue)).toEqual([{ ...document, path: null }])
+  })
+
+  it('reports storage failures so closing can fail safely', () => {
+    expect(savePersistedDocuments(() => ({
+      setItem: () => { throw new Error('quota exceeded') },
+    }), [fallback])).toBe(false)
+  })
+
+  it('reports storage accessor failures so dirty unloads remain blocked', () => {
+    expect(savePersistedDocuments(() => {
+      throw new Error('storage access denied')
+    }, [fallback])).toBe(false)
   })
 })

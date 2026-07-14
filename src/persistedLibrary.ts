@@ -79,3 +79,19 @@ export function loadPersistedDocuments(
     return [...fallback]
   }
 }
+
+export function savePersistedDocuments(
+  getStorage: () => Pick<Storage, 'setItem'>,
+  documents: readonly LineDocument[],
+): boolean {
+  try {
+    const storage = getStorage()
+    storage.setItem(
+      LIBRARY_STORAGE_KEY,
+      JSON.stringify(documents.map((document) => ({ ...document, path: null }))),
+    )
+    return true
+  } catch {
+    return false
+  }
+}

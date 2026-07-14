@@ -6,6 +6,7 @@ import {
   type MenuCommand,
   type OpenFilesOptions,
   type PlatformInfo,
+  type PrepareCloseAction,
   type SaveFileAsInput,
   type SaveFileInput,
 } from './types'
@@ -79,6 +80,10 @@ const api: LineApi = Object.freeze({
     subscribe<MenuCommand>(IPC_CHANNELS.menuCommand, callback),
   onExternalFilesOpened: (callback: (documents: LineDocument[]) => void) =>
     subscribe<LineDocument[]>(IPC_CHANNELS.externalFilesOpened, callback),
+  onPrepareClose: (callback: (action: PrepareCloseAction) => void) =>
+    subscribe<PrepareCloseAction>(IPC_CHANNELS.prepareClose, callback),
+  finishPrepareClose: (success: boolean) =>
+    ipcRenderer.send(IPC_CHANNELS.prepareCloseFinished, success),
 })
 
 contextBridge.exposeInMainWorld('line', api)

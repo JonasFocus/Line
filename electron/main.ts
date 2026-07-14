@@ -35,6 +35,10 @@ import {
   writeFileIfUnchanged,
 } from './documentRevision'
 import { resolveSaveDialogDefaultPath } from './savePath'
+import {
+  resolveUnsavedCloseAction,
+  UNSAVED_CLOSE_BUTTONS,
+} from './unsavedClose'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
@@ -44,6 +48,9 @@ const externalFileQueue = new ExternalFileQueue()
 const documentSaveQueue = new KeyedTaskQueue()
 
 let mainWindow: BrowserWindow | null = null
+let allowWindowClose = false
+let closePreparationPending = false
+let quitRequested = false
 
 function normalizePath(filePath: string): string {
   return path.resolve(filePath)
@@ -361,6 +368,22 @@ function registerIpcHandlers(): void {
 
     return documents
   })
+  ipcMain.on(IPC_CHANNELS.prepareCloseFinished, (event, success: unknown) => {
+    if (!mainWindow || event.sender !== mainWindow.webContents || !closePreparationPending) return
+
+    closePreparationPending = false
+    if (success !== true) {
+      quitRequested = false
+      return
+    }
+
+    allowWindowClose = true
+    if (quitRequested) {
+      app.quit()
+    } else {
+      mainWindow.close()
+    }
+  })
 }
 
 async function readExternalDocuments(
@@ -415,6 +438,8 @@ async function sendExternalDocuments(filePaths: string[]): Promise<void> {
 
 function createWindow(): BrowserWindow {
   externalFileQueue.resetRenderer()
+  allowWindowClose = false
+  closePreparationPending = false
   const window = new BrowserWindow({
     width: 1520,
     height: 960,
@@ -436,6 +461,36 @@ function createWindow(): BrowserWindow {
   })
 
   window.once('ready-to-show', () => window.show())
+  window.webContents.on('will-prevent-unload', (event) => {
+    if (allowWindowClose) {
+      event.preventDefault()
+      return
+    }
+    if (closePreparationPending) return
+
+    const response = dialog.showMessageBoxSync(window, {
+      type: 'warning',
+      buttons: [...UNSAVED_CLOSE_BUTTONS],
+      defaultId: 0,
+      cancelId: 1,
+      title: 'Save changes before closing?',
+      message: 'Save changes to files before closing?',
+      detail: "If you close without saving, your changes will remain in Line's library but will not be written to their files.",
+      noLink: true,
+    })
+    const action = resolveUnsavedCloseAction(response)
+
+    if (action === 'cancel') {
+      quitRequested = false
+      return
+    }
+
+    closePreparationPending = true
+    window.webContents.send(
+      IPC_CHANNELS.prepareClose,
+      action === 'save' ? 'save' : 'preserve',
+    )
+  })
   window.on('closed', () => {
     if (mainWindow === window) {
       mainWindow = null
@@ -474,6 +529,10 @@ function createWindow(): BrowserWindow {
 }
 
 app.setName('Line')
+
+app.on('before-quit', () => {
+  quitRequested = true
+})
 
 app.on('open-file', (event, filePath) => {
   event.preventDefault()

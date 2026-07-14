@@ -6,6 +6,17 @@ export interface LatestTaskResult<T> {
 export class LatestTaskQueue<T> {
   private readonly pending = new Map<string, T>()
   private readonly running = new Set<string>()
+  private readonly idleWaiters = new Map<string, Set<() => void>>()
+
+  waitForIdle(key: string): Promise<void> {
+    if (!this.running.has(key)) return Promise.resolve()
+
+    return new Promise((resolve) => {
+      const waiters = this.idleWaiters.get(key) ?? new Set()
+      waiters.add(resolve)
+      this.idleWaiters.set(key, waiters)
+    })
+  }
 
   async run(
     key: string,
@@ -34,6 +45,9 @@ export class LatestTaskQueue<T> {
       }
     } finally {
       this.running.delete(key)
+      const waiters = this.idleWaiters.get(key)
+      this.idleWaiters.delete(key)
+      waiters?.forEach((resolve) => resolve())
     }
   }
 }
