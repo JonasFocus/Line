@@ -27,11 +27,15 @@ type ReplaceFile = (source: string, destination: string) => Promise<void>
 type SyncDirectory = (directoryPath: string) => Promise<void>
 
 export interface AtomicWriteOptions {
+  requireAtomic?: boolean
   replaceFile?: ReplaceFile
   syncDirectory?: SyncDirectory
   validateBeforeCommit?: () => Promise<void>
   writeTemporaryFile?: WriteTemporaryFile
 }
+
+export const ATOMIC_WRITE_UNAVAILABLE_MESSAGE =
+  'This document cannot be safely saved at its current location. Use Save As to keep your version.'
 
 async function writeTemporaryFile(
   sourcePath: string | null,
@@ -150,6 +154,9 @@ export async function atomicWriteFile(
   // Replacing an inode would silently sever its other hard links. Preserve the
   // existing behavior for this uncommon case instead of changing file identity.
   if (existingStats && existingStats.nlink > 1) {
+    if (options.requireAtomic) {
+      throw new Error(ATOMIC_WRITE_UNAVAILABLE_MESSAGE)
+    }
     await options.validateBeforeCommit?.()
     await writeInPlace(destination, content)
     return
@@ -161,6 +168,9 @@ export async function atomicWriteFile(
   } catch (error) {
     const code = (error as NodeJS.ErrnoException).code
     if (existingStats && (code === 'EACCES' || code === 'EPERM')) {
+      if (options.requireAtomic) {
+        throw new Error(ATOMIC_WRITE_UNAVAILABLE_MESSAGE)
+      }
       await options.validateBeforeCommit?.()
       await writeInPlace(destination, content)
       return

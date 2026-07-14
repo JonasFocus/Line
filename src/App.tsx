@@ -22,6 +22,7 @@ export interface LineDocument {
 type EditorMode = 'edit' | 'split' | 'preview'
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
 type SaveRequest = {
+  defaultToDocuments: boolean
   document: LineDocument
   saveAs: boolean
   saveCopy: boolean
@@ -65,6 +66,10 @@ function isDocument(value: unknown): value is LineDocument {
 }
 
 const STORAGE_KEY = 'line.library.v1'
+const DOCUMENT_CONFLICT_MESSAGE =
+  'This document changed on disk. Use Save As to keep your version without overwriting the external changes.'
+const ATOMIC_SAVE_UNAVAILABLE_MESSAGE =
+  'This document cannot be safely saved at its current location. Use Save As to keep your version.'
 
 function readPersistedDocuments(): LineDocument[] {
   try {
@@ -517,11 +522,12 @@ export default function App() {
     }
   }, [showToast])
 
-  const saveDocument = useCallback(async (saveAs = false, saveCopy = false) => {
+  const saveDocument = useCallback(async (saveAs = false, saveCopy = false, defaultToDocuments = false) => {
     if (!selectedDocument) return
 
-    const request = { document: selectedDocument, saveAs, saveCopy }
+    const request = { defaultToDocuments, document: selectedDocument, saveAs, saveCopy }
     await saveQueueRef.current.run(selectedDocument.id, request, async ({
+      defaultToDocuments: requestedDocumentsDefault,
       document: documentToSave,
       saveAs: requestedSaveAs,
       saveCopy: requestedSaveCopy,
@@ -536,6 +542,7 @@ export default function App() {
           content: documentToSave.content,
           path: documentToSave.path,
           currentPath: documentToSave.path,
+          defaultToDocuments: requestedDocumentsDefault,
           expectedRevision: documentToSave.revision,
           saveCopy: requestedSaveCopy,
           suggestedName: `${safeTitle}${requestedSaveCopy ? ' (Line copy)' : ''}.md`,
@@ -575,12 +582,14 @@ export default function App() {
         }
       } catch (reason) {
         const message = reason instanceof Error ? reason.message : ''
-        const changedOnDisk = message.includes('changed on disk')
+        const recoveryMessage = message.includes('changed on disk')
+          ? DOCUMENT_CONFLICT_MESSAGE
+          : message.includes('cannot be safely saved')
+            ? ATOMIC_SAVE_UNAVAILABLE_MESSAGE
+            : null
         if (selectedIdRef.current === documentToSave.id) {
-          setSaveState(changedOnDisk ? 'dirty' : 'error')
-          setError(changedOnDisk
-            ? 'This document changed on disk. Use Save As to keep your version without overwriting the external changes.'
-            : message || 'The document could not be saved.')
+          setSaveState(recoveryMessage ? 'dirty' : 'error')
+          setError(recoveryMessage || message || 'The document could not be saved.')
         }
         return { continueWithPending: false }
       }
@@ -746,8 +755,16 @@ export default function App() {
         <div className="error-banner" role="alert">
           <Icon name="warning" size={17} />
           <span>{error}</span>
-          {error.includes('changed on disk') && (
-            <button className="error-action" onClick={() => { setError(null); void saveDocument(true, true) }} type="button">Save As…</button>
+          {error.includes('Use Save As') && (
+            <button
+              className="error-action"
+              onClick={() => {
+                const defaultToDocuments = error === ATOMIC_SAVE_UNAVAILABLE_MESSAGE
+                setError(null)
+                void saveDocument(true, true, defaultToDocuments)
+              }}
+              type="button"
+            >Save As…</button>
           )}
           <button aria-label="Dismiss error" className="error-dismiss" onClick={() => setError(null)} type="button"><Icon name="close" size={14} /></button>
         </div>

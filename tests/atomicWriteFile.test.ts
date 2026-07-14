@@ -17,6 +17,7 @@ import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import {
+  ATOMIC_WRITE_UNAVAILABLE_MESSAGE,
   atomicWriteFile,
   resolveWriteDestination,
   resolveWriteQueueKey,
@@ -193,6 +194,21 @@ describe('atomicWriteFile', () => {
     expect((await stat(filePath)).ino).toBe((await stat(linkedPath)).ino)
   })
 
+  it('refuses a hard-link fallback when an atomic replacement is required', async () => {
+    const directory = await makeTemporaryDirectory()
+    const filePath = path.join(directory, 'note.md')
+    const linkedPath = path.join(directory, 'linked.md')
+    await writeFile(filePath, 'original')
+    await link(filePath, linkedPath)
+
+    await expect(
+      atomicWriteFile(filePath, 'replacement', { requireAtomic: true }),
+    ).rejects.toThrow(ATOMIC_WRITE_UNAVAILABLE_MESSAGE)
+
+    expect(await readFile(filePath, 'utf8')).toBe('original')
+    expect(await readFile(linkedPath, 'utf8')).toBe('original')
+  })
+
   it('uses one save-queue key for hard-link aliases', async () => {
     const directory = await makeTemporaryDirectory()
     const filePath = path.join(directory, 'note.md')
@@ -222,6 +238,23 @@ describe('atomicWriteFile', () => {
 
     expect(await readFile(filePath, 'utf8')).toBe('replacement')
     expect(await readdir(directory)).toEqual(['note.md'])
+  })
+
+  it('refuses a restricted-directory fallback when an atomic replacement is required', async () => {
+    const directory = await makeTemporaryDirectory()
+    const filePath = path.join(directory, 'note.md')
+    await writeFile(filePath, 'original')
+    await chmod(filePath, 0o666)
+    await chmod(directory, 0o555)
+
+    try {
+      await expect(
+        atomicWriteFile(filePath, 'replacement', { requireAtomic: true }),
+      ).rejects.toThrow(ATOMIC_WRITE_UNAVAILABLE_MESSAGE)
+      expect(await readFile(filePath, 'utf8')).toBe('original')
+    } finally {
+      await chmod(directory, 0o755)
+    }
   })
 
   it('ignores unsupported directory sync errors after a successful replacement', async () => {

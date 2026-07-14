@@ -45,6 +45,7 @@ export async function writeFileIfUnchanged(
 
   await validateRevision()
   await writeFile(filePath, content, {
+    requireAtomic: true,
     validateBeforeCommit: validateRevision,
   })
 

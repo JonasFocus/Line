@@ -34,7 +34,7 @@ import {
   createDocumentRevision,
   writeFileIfUnchanged,
 } from './documentRevision'
-import { resolveAvailableCopyPath } from './savePath'
+import { resolveSaveDialogDefaultPath } from './savePath'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
@@ -204,11 +204,14 @@ async function saveDocumentAs(
     typeof input.currentPath === 'string'
       ? normalizePath(input.currentPath)
       : null
-  const defaultPath = normalizedCurrentPath && grantedPaths.has(normalizedCurrentPath)
-    ? input.saveCopy
-      ? await resolveAvailableCopyPath(normalizedCurrentPath, suggestedName)
-      : normalizedCurrentPath
-    : path.join(app.getPath('documents'), suggestedName)
+  const defaultPath = await resolveSaveDialogDefaultPath({
+    currentPath: normalizedCurrentPath,
+    currentPathGranted: Boolean(normalizedCurrentPath && grantedPaths.has(normalizedCurrentPath)),
+    defaultToDocuments: Boolean(input.defaultToDocuments),
+    documentsPath: app.getPath('documents'),
+    saveCopy: Boolean(input.saveCopy),
+    suggestedName,
+  })
 
   const result = await showSaveDialog({
     title: 'Save Document',

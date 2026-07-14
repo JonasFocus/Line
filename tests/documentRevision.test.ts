@@ -89,6 +89,18 @@ describe('writeFileIfUnchanged', () => {
     expect(await readFile(filePath, 'utf8')).toBe('external edit')
   })
 
+  it('preserves hard-linked files when a guarded save cannot be atomic', async () => {
+    const { directory, filePath, revision } = await makeDocument()
+    const hardPath = path.join(directory, 'hard.md')
+    await link(filePath, hardPath)
+
+    await expect(
+      writeFileIfUnchanged(filePath, 'line edit', revision),
+    ).rejects.toThrow('Use Save As')
+    expect(await readFile(filePath, 'utf8')).toBe('original')
+    expect(await readFile(hardPath, 'utf8')).toBe('original')
+  })
+
   it('does not start the write after detecting a conflict', async () => {
     const { filePath, revision } = await makeDocument()
     const write = vi.fn(async () => undefined)

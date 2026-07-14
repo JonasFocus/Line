@@ -13,21 +13,70 @@ async function pathExists(filePath: string): Promise<boolean> {
   }
 }
 
-export async function resolveAvailableCopyPath(
-  currentPath: string,
+async function resolveAvailablePath(
+  directory: string,
   suggestedName: string,
-  exists: PathExists = pathExists,
+  excludedPath: string | null,
+  exists: PathExists,
 ): Promise<string> {
-  const directory = path.dirname(currentPath)
   const extension = path.extname(suggestedName)
   const stem = path.basename(suggestedName, extension)
   let copyNumber = 1
   let candidate = path.join(directory, suggestedName)
 
-  while (path.resolve(candidate) === path.resolve(currentPath) || await exists(candidate)) {
+  while (
+    (excludedPath && path.resolve(candidate) === path.resolve(excludedPath)) ||
+    await exists(candidate)
+  ) {
     copyNumber += 1
     candidate = path.join(directory, `${stem} ${copyNumber}${extension}`)
   }
 
   return candidate
+}
+
+export async function resolveAvailableCopyPath(
+  currentPath: string,
+  suggestedName: string,
+  exists: PathExists = pathExists,
+): Promise<string> {
+  return resolveAvailablePath(
+    path.dirname(currentPath),
+    suggestedName,
+    currentPath,
+    exists,
+  )
+}
+
+export async function resolveSaveDialogDefaultPath({
+  currentPath,
+  currentPathGranted,
+  defaultToDocuments,
+  documentsPath,
+  saveCopy,
+  suggestedName,
+}: {
+  currentPath: string | null
+  currentPathGranted: boolean
+  defaultToDocuments: boolean
+  documentsPath: string
+  saveCopy: boolean
+  suggestedName: string
+}, exists: PathExists = pathExists): Promise<string> {
+  if (defaultToDocuments) {
+    return resolveAvailablePath(
+      documentsPath,
+      suggestedName,
+      null,
+      exists,
+    )
+  }
+
+  if (!currentPath || !currentPathGranted) {
+    return path.join(documentsPath, suggestedName)
+  }
+
+  return saveCopy
+    ? resolveAvailableCopyPath(currentPath, suggestedName)
+    : currentPath
 }

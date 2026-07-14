@@ -33,6 +33,7 @@ export interface SaveFileInput {
 export interface SaveFileAsInput {
   content: string
   currentPath?: string | null
+  defaultToDocuments?: boolean
   suggestedName?: string
   saveCopy?: boolean
 }
