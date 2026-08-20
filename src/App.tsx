@@ -4,7 +4,7 @@ import { extractOutline, MarkdownPreview, type OutlineItem } from './components/
 import { parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
 import { documentIsUnlinked, type LineDocument } from './lineDocument'
-import { loadPersistedDocuments, removeDocumentFromLibrary, removeLegacyDemoDocuments, restoreDocumentToLibrary, savePersistedDocuments } from './persistedLibrary'
+import { LIBRARY_PERSIST_FAILED_MESSAGE, loadPersistedDocuments, removeDocumentFromLibrary, removeLegacyDemoDocuments, restoreDocumentToLibrary, savePersistedDocuments } from './persistedLibrary'
 import { libraryPaneHeading, resolveActiveFilter, resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
 import { shouldFocusLibrarySearchOnFind } from './findShortcut'
@@ -517,22 +517,62 @@ export default function App() {
   const importDocument = useCallback(async () => {
     if (closeReadyRef.current) return
     const api = lineApi()
-    if (!api?.openFiles && !api?.importMarkdown) {
+    if (!api?.chooseOpenFiles && !api?.openFiles && !api?.importMarkdown) {
       showToast('Import is available in the desktop app')
       return
     }
-    setLoading(true)
+
     try {
-      const result = api.openFiles ? await api.openFiles({ multiple: true }) : [await api.importMarkdown?.()]
-      const imported = result.map(normalizeImported).filter((document): document is LineDocument => document !== null)
+      let imported: LineDocument[] = []
+      let openError: string | undefined
+
+      if (api.chooseOpenFiles && api.readOpenFiles) {
+        const filePaths = await api.chooseOpenFiles({ multiple: true })
+        // Cancel: empty paths, no spinner, no error.
+        if (!filePaths.length) return
+
+        setLoading(true)
+        try {
+          const result = await api.readOpenFiles(filePaths)
+          imported = result.documents
+            .map(normalizeImported)
+            .filter((document): document is LineDocument => document !== null)
+          openError = result.error
+        } finally {
+          setLoading(false)
+        }
+      } else if (api.openFiles) {
+        setLoading(true)
+        try {
+          const result = await api.openFiles({ multiple: true })
+          imported = result.documents
+            .map(normalizeImported)
+            .filter((document): document is LineDocument => document !== null)
+          openError = result.error
+        } finally {
+          setLoading(false)
+        }
+      } else {
+        const single = await api.importMarkdown?.()
+        imported = [single]
+          .map(normalizeImported)
+          .filter((document): document is LineDocument => document !== null)
+      }
+
+      if (openError) {
+        setError(openError)
+      } else if (imported.length) {
+        setError(null)
+      }
+
       if (!imported.length) return
+
       const { documents: safeImported, protectedCount } = reconcileOpenedDocuments(documentsRef.current, imported)
       const importedIds = new Set(safeImported.map((document) => document.id))
       const nextDocuments = [...safeImported, ...documentsRef.current.filter((document) => !importedIds.has(document.id))]
       documentsRef.current = nextDocuments
       setDocuments(nextDocuments)
       setSelectedId(safeImported[0].id)
-      setError(null)
       setActiveFilter('all')
       setActiveTag(null)
       setSearch('')
@@ -542,9 +582,8 @@ export default function App() {
         showToast(safeImported.length === 1 ? 'Markdown imported' : `${safeImported.length} documents imported`)
       }
     } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Could not import that file.')
-    } finally {
       setLoading(false)
+      setError(reason instanceof Error ? reason.message : 'Could not import that file.')
     }
   }, [showToast])
 
@@ -555,7 +594,6 @@ export default function App() {
       saveCopy: requestedSaveCopy,
     }: SaveRequest) => {
       const submittedContent = documentToSave.content
-      if (selectedIdRef.current === documentToSave.id) setSaveState('saving')
 
       try {
         const api = lineApi()
@@ -569,12 +607,47 @@ export default function App() {
           saveCopy: requestedSaveCopy,
           suggestedName: `${safeTitle}${requestedSaveCopy ? ' (Line copy)' : ''}.md`,
         }
-        const result = requestedSaveAs ? await api?.saveFileAs?.(saveInput) : await api?.saveDocument?.(saveInput)
-        if (api && result === null) {
-          if (selectedIdRef.current === documentToSave.id) {
-            setSaveState(resolveSaveState(documentToSave))
+
+        let result: unknown
+        if (requestedSaveAs) {
+          // Sheet first; only show Saving after the user confirms a path.
+          const chosenPath = api?.chooseSaveFileAs
+            ? await api.chooseSaveFileAs(saveInput)
+            : null
+          if (api?.chooseSaveFileAs) {
+            if (chosenPath === null) {
+              return { continueWithPending: false }
+            }
+            if (selectedIdRef.current === documentToSave.id) setSaveState('saving')
+            const sameGrantedPath =
+              typeof documentToSave.path === 'string' &&
+              chosenPath === documentToSave.path
+            result = await api.saveFile?.({
+              path: chosenPath,
+              content: documentToSave.content,
+              expectedRevision: sameGrantedPath
+                ? documentToSave.revision ?? undefined
+                : undefined,
+            })
+          } else {
+            if (selectedIdRef.current === documentToSave.id) setSaveState('saving')
+            result = await api?.saveFileAs?.(saveInput)
+            if (api && result === null) {
+              if (selectedIdRef.current === documentToSave.id) {
+                setSaveState(resolveSaveState(documentToSave))
+              }
+              return { continueWithPending: false }
+            }
           }
-          return { continueWithPending: false }
+        } else {
+          if (selectedIdRef.current === documentToSave.id) setSaveState('saving')
+          result = await api?.saveDocument?.(saveInput)
+          if (api && result === null) {
+            if (selectedIdRef.current === documentToSave.id) {
+              setSaveState(resolveSaveState(documentToSave))
+            }
+            return { continueWithPending: false }
+          }
         }
 
         const saved = normalizeImported(result)
@@ -667,14 +740,20 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    const timer = window.setTimeout(() => persistDocuments(documents), 350)
+    const timer = window.setTimeout(() => {
+      if (!persistDocuments(documents)) {
+        setError(LIBRARY_PERSIST_FAILED_MESSAGE)
+      }
+    }, 350)
     return () => window.clearTimeout(timer)
   }, [documents, persistDocuments])
 
   useEffect(() => {
     const warnAboutUnsavedChanges = (event: BeforeUnloadEvent) => {
       const latestDocuments = documentsRef.current
-      persistDocuments(latestDocuments)
+      if (!persistDocuments(latestDocuments)) {
+        setError(LIBRARY_PERSIST_FAILED_MESSAGE)
+      }
       if (!latestDocuments.some((document) => document.dirty)) return
       event.preventDefault()
       event.returnValue = ''
@@ -694,7 +773,7 @@ export default function App() {
       if (action === 'preserve') {
         const preserved = persistDocuments(documentsRef.current)
         if (!preserved) {
-          setError('Line could not preserve your changes. Save them before closing.')
+          setError(LIBRARY_PERSIST_FAILED_MESSAGE)
         } else {
           markReadyToClose()
         }

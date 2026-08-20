@@ -1,7 +1,10 @@
 export const IPC_CHANNELS = {
   createBlank: 'line:documents:create-blank',
+  chooseOpenFiles: 'line:documents:choose-open-files',
+  readOpenFiles: 'line:documents:read-open-files',
   openFiles: 'line:documents:open-files',
   saveFile: 'line:documents:save-file',
+  chooseSaveFileAs: 'line:documents:choose-save-file-as',
   saveFileAs: 'line:documents:save-file-as',
   platformInfo: 'line:app:platform-info',
   rendererReady: 'line:app:renderer-ready',
@@ -28,10 +31,17 @@ export interface OpenFilesOptions {
   multiple?: boolean
 }
 
+/** File → Open result: successes plus an optional banner message for bad files. */
+export interface OpenFilesResult {
+  documents: LineDocument[]
+  error?: string
+}
+
 export interface SaveFileInput {
   path: string
   content: string
-  expectedRevision: string
+  /** When set, conflict-check before overwrite. Omit for a newly chosen Save As path. */
+  expectedRevision?: string
 }
 
 export interface SaveFileAsInput {
@@ -40,6 +50,7 @@ export interface SaveFileAsInput {
   defaultToDocuments?: boolean
   suggestedName?: string
   saveCopy?: boolean
+  expectedRevision?: string | null
 }
 
 export interface PlatformInfo {
@@ -56,9 +67,12 @@ export interface PlatformInfo {
 export interface LineApi {
   createBlankDocument(): Promise<LineDocument>
   createDocument(): Promise<LineDocument>
-  openFiles(options?: OpenFilesOptions): Promise<LineDocument[]>
+  chooseOpenFiles(options?: OpenFilesOptions): Promise<string[]>
+  readOpenFiles(filePaths: string[]): Promise<OpenFilesResult>
+  openFiles(options?: OpenFilesOptions): Promise<OpenFilesResult>
   importMarkdown(): Promise<LineDocument | null>
   saveFile(input: SaveFileInput): Promise<LineDocument>
+  chooseSaveFileAs(input: SaveFileAsInput): Promise<string | null>
   saveFileAs(input: SaveFileAsInput): Promise<LineDocument | null>
   saveDocument(
     input: SaveFileAsInput & {

@@ -6,6 +6,8 @@ import {
   formatExternalOpenError,
   isCandidateExternalFileArg,
   partitionExternalOpenResults,
+  settleDocumentReads,
+  toOpenFilesResult,
 } from '../electron/externalFileIntake'
 
 describe('external file intake routing', () => {
@@ -112,6 +114,62 @@ describe('external open error surfacing', () => {
           message: 'Line supports .md, .markdown, and .txt files.',
         },
       ],
+    })
+  })
+})
+
+describe('File → Open batch settle', () => {
+  it('keeps good files when one read fails and does not abort the batch', async () => {
+    const ok = { id: 'ok', content: '# ok' }
+    const { documents, failures } = await settleDocumentReads(
+      ['/tmp/ok.md', '/tmp/bad.md', '/tmp/also-ok.txt'],
+      async (filePath) => {
+        if (filePath.endsWith('bad.md')) {
+          throw new Error('The selected file is larger than the 10 MB limit.')
+        }
+        if (filePath.endsWith('ok.md')) return ok
+        return { id: 'also', content: 'text' }
+      },
+    )
+
+    expect(documents).toEqual([ok, { id: 'also', content: 'text' }])
+    expect(failures).toEqual([
+      {
+        filePath: '/tmp/bad.md',
+        message: 'The selected file is larger than the 10 MB limit.',
+      },
+    ])
+  })
+
+  it('aggregates failures onto the open result without dropping successes', async () => {
+    const document = { id: '/tmp/ok.md', content: '# ok' }
+    const settled = await settleDocumentReads(['/tmp/ok.md', '/tmp/gone.md'], async (filePath) => {
+      if (filePath.endsWith('gone.md')) {
+        throw new Error('ENOENT: no such file or directory')
+      }
+      return document
+    })
+
+    expect(toOpenFilesResult(settled.documents, settled.failures)).toEqual({
+      documents: [document],
+      error: 'Could not open gone.md: ENOENT: no such file or directory',
+    })
+  })
+
+  it('returns documents only when every read succeeds', () => {
+    expect(toOpenFilesResult([{ id: 'a' }], [])).toEqual({
+      documents: [{ id: 'a' }],
+    })
+  })
+
+  it('still reports an error when every selected file fails', async () => {
+    const settled = await settleDocumentReads(['/tmp/a.md', '/tmp/b.md'], async () => {
+      throw new Error('permission denied')
+    })
+
+    expect(toOpenFilesResult(settled.documents, settled.failures)).toEqual({
+      documents: [],
+      error: 'Could not open 2 files (a.md, b.md).',
     })
   })
 })

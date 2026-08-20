@@ -19,6 +19,7 @@ import {
   type LineDocument,
   type MenuCommand,
   type OpenFilesOptions,
+  type OpenFilesResult,
   type PlatformInfo,
   type SaveFileAsInput,
   type SaveFileInput,
@@ -27,8 +28,9 @@ import { ExternalFileQueue } from './externalFileQueue'
 import {
   collectExternalFilePathsFromArgv,
   formatExternalOpenError,
-  partitionExternalOpenResults,
+  settleDocumentReads,
   SUPPORTED_EXTENSIONS,
+  toOpenFilesResult,
   type ExternalOpenFailure,
 } from './externalFileIntake'
 import { KeyedTaskQueue } from './keyedTaskQueue'
@@ -41,14 +43,21 @@ import {
   createDocumentRevision,
   writeFileIfUnchanged,
 } from './documentRevision'
+import {
+  assertDocumentByteLimit,
+  DOCUMENT_TOO_LARGE_MESSAGE,
+  MAX_DOCUMENT_BYTES,
+} from './documentSize'
+import { createSavedLineDocument } from './savedDocument'
+import { resolveSaveAsExpectedRevision } from './saveAsRevision'
 import { resolveSaveDialogDefaultPath } from './savePath'
 import {
+  CLOSE_PREPARE_TIMEOUT_MS,
   resolveUnsavedCloseAction,
   UNSAVED_CLOSE_BUTTONS,
 } from './unsavedClose'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
 const grantedPaths = new Set<string>()
 const externalFileQueue = new ExternalFileQueue()
 const documentSaveQueue = new KeyedTaskQueue()
@@ -56,7 +65,27 @@ const documentSaveQueue = new KeyedTaskQueue()
 let mainWindow: BrowserWindow | null = null
 let allowWindowClose = false
 let closePreparationPending = false
+let closePrepareTimeout: NodeJS.Timeout | null = null
 let quitRequested = false
+
+function clearClosePreparation(): void {
+  closePreparationPending = false
+  if (closePrepareTimeout) {
+    clearTimeout(closePrepareTimeout)
+    closePrepareTimeout = null
+  }
+}
+
+function armClosePreparationTimeout(): void {
+  if (closePrepareTimeout) {
+    clearTimeout(closePrepareTimeout)
+  }
+  closePrepareTimeout = setTimeout(() => {
+    closePrepareTimeout = null
+    closePreparationPending = false
+    quitRequested = false
+  }, CLOSE_PREPARE_TIMEOUT_MS)
+}
 
 function normalizePath(filePath: string): string {
   return path.resolve(filePath)
@@ -83,7 +112,7 @@ async function readDocument(filePath: string): Promise<LineDocument> {
     throw new Error('The selected item is not a file.')
   }
   if (fileStats.size > MAX_DOCUMENT_BYTES) {
-    throw new Error('The selected file is larger than the 10 MB limit.')
+    throw new Error(DOCUMENT_TOO_LARGE_MESSAGE)
   }
 
   const content = await readFile(normalizedPath, 'utf8')
@@ -128,9 +157,9 @@ async function showSaveDialog(
     : dialog.showSaveDialog(options)
 }
 
-async function openDocuments(
+async function chooseOpenFilePaths(
   options: OpenFilesOptions = {},
-): Promise<LineDocument[]> {
+): Promise<string[]> {
   const properties: OpenDialogOptions['properties'] = ['openFile']
   if (options.multiple !== false) {
     properties.push('multiSelections')
@@ -149,26 +178,45 @@ async function openDocuments(
     return []
   }
 
-  return Promise.all(result.filePaths.map(readDocument))
+  return result.filePaths.map(normalizePath)
+}
+
+async function readOpenDocuments(filePaths: string[]): Promise<OpenFilesResult> {
+  const { documents, failures } = await settleDocumentReads(
+    filePaths,
+    readDocument,
+  )
+  return toOpenFilesResult(documents, failures)
+}
+
+async function openDocuments(
+  options: OpenFilesOptions = {},
+): Promise<OpenFilesResult> {
+  const filePaths = await chooseOpenFilePaths(options)
+  if (filePaths.length === 0) {
+    return { documents: [] }
+  }
+  return readOpenDocuments(filePaths)
 }
 
 async function saveDocument(input: SaveFileInput): Promise<LineDocument> {
   assertString(input?.path, 'path')
   assertString(input?.content, 'content')
-  assertString(input?.expectedRevision, 'expectedRevision')
 
   const normalizedPath = normalizePath(input.path)
   assertSupportedPath(normalizedPath)
+  assertDocumentByteLimit(input.content)
 
   if (!grantedPaths.has(normalizedPath)) {
     throw new Error('Save access has not been granted for this file.')
   }
 
-  return writeDocument(
-    normalizedPath,
-    input.content,
-    input.expectedRevision,
-  )
+  const expectedRevision =
+    typeof input.expectedRevision === 'string'
+      ? input.expectedRevision
+      : undefined
+
+  return writeDocument(normalizedPath, input.content, expectedRevision)
 }
 
 async function writeDocument(
@@ -176,13 +224,15 @@ async function writeDocument(
   content: string,
   expectedRevision?: string,
 ): Promise<LineDocument> {
+  assertDocumentByteLimit(content)
+
   const destination = await resolveWriteDestination(normalizedPath)
   const queueKey = await resolveWriteQueueKey(destination)
 
   return documentSaveQueue.run(queueKey, async () => {
     let writtenRevision: string
     if (expectedRevision === undefined) {
-      await atomicWriteFile(destination, content)
+      await atomicWriteFile(destination, content, { requireAtomic: true })
       writtenRevision = createDocumentRevision(content)
     } else {
       writtenRevision = await writeFileIfUnchanged(
@@ -191,8 +241,22 @@ async function writeDocument(
         expectedRevision,
       )
     }
-    const savedDocument = await readDocument(normalizedPath)
-    return { ...savedDocument, revision: writtenRevision }
+
+    grantedPaths.add(normalizedPath)
+
+    let modifiedAt: string | null
+    try {
+      modifiedAt = (await stat(normalizedPath)).mtime.toISOString()
+    } catch {
+      modifiedAt = new Date().toISOString()
+    }
+
+    return createSavedLineDocument({
+      filePath: normalizedPath,
+      content,
+      revision: writtenRevision,
+      modifiedAt,
+    })
   })
 }
 
@@ -207,10 +271,12 @@ function safeSuggestedName(suggestedName: unknown): string {
     : `${baseName}.md`
 }
 
-async function saveDocumentAs(
+async function chooseSaveFilePath(
   input: SaveFileAsInput,
-): Promise<LineDocument | null> {
-  assertString(input?.content, 'content')
+): Promise<string | null> {
+  if (typeof input?.content === 'string') {
+    assertDocumentByteLimit(input.content)
+  }
 
   const suggestedName = safeSuggestedName(input.suggestedName)
   const normalizedCurrentPath =
@@ -219,7 +285,9 @@ async function saveDocumentAs(
       : null
   const defaultPath = await resolveSaveDialogDefaultPath({
     currentPath: normalizedCurrentPath,
-    currentPathGranted: Boolean(normalizedCurrentPath && grantedPaths.has(normalizedCurrentPath)),
+    currentPathGranted: Boolean(
+      normalizedCurrentPath && grantedPaths.has(normalizedCurrentPath),
+    ),
     defaultToDocuments: Boolean(input.defaultToDocuments),
     documentsPath: app.getPath('documents'),
     saveCopy: Boolean(input.saveCopy),
@@ -244,7 +312,39 @@ async function saveDocumentAs(
   const normalizedPath = normalizePath(result.filePath)
   assertSupportedPath(normalizedPath)
   grantedPaths.add(normalizedPath)
-  return writeDocument(normalizedPath, input.content)
+  return normalizedPath
+}
+
+async function saveDocumentAs(
+  input: SaveFileAsInput,
+): Promise<LineDocument | null> {
+  assertString(input?.content, 'content')
+  assertDocumentByteLimit(input.content)
+
+  const normalizedCurrentPath =
+    typeof input.currentPath === 'string'
+      ? normalizePath(input.currentPath)
+      : null
+  const currentPathGranted = Boolean(
+    normalizedCurrentPath && grantedPaths.has(normalizedCurrentPath),
+  )
+
+  const normalizedPath = await chooseSaveFilePath(input)
+  if (!normalizedPath) {
+    return null
+  }
+
+  const expectedRevision = resolveSaveAsExpectedRevision({
+    chosenPath: normalizedPath,
+    currentPath: normalizedCurrentPath,
+    currentPathGranted,
+    expectedRevision:
+      typeof input.expectedRevision === 'string'
+        ? input.expectedRevision
+        : undefined,
+  })
+
+  return writeDocument(normalizedPath, input.content, expectedRevision)
 }
 
 function sendMenuCommand(command: MenuCommand): void {
@@ -334,11 +434,28 @@ function installApplicationMenu(): void {
 function registerIpcHandlers(): void {
   ipcMain.handle(IPC_CHANNELS.createBlank, () => createBlankDocument())
   ipcMain.handle(
+    IPC_CHANNELS.chooseOpenFiles,
+    (_event, options?: OpenFilesOptions) => chooseOpenFilePaths(options),
+  )
+  ipcMain.handle(
+    IPC_CHANNELS.readOpenFiles,
+    (_event, filePaths: string[]) => {
+      if (!Array.isArray(filePaths)) {
+        throw new TypeError('filePaths must be an array.')
+      }
+      return readOpenDocuments(filePaths.map(String))
+    },
+  )
+  ipcMain.handle(
     IPC_CHANNELS.openFiles,
     (_event, options?: OpenFilesOptions) => openDocuments(options),
   )
   ipcMain.handle(IPC_CHANNELS.saveFile, (_event, input: SaveFileInput) =>
     saveDocument(input),
+  )
+  ipcMain.handle(
+    IPC_CHANNELS.chooseSaveFileAs,
+    (_event, input: SaveFileAsInput) => chooseSaveFilePath(input),
   )
   ipcMain.handle(
     IPC_CHANNELS.saveFileAs,
@@ -391,7 +508,7 @@ function registerIpcHandlers(): void {
   ipcMain.on(IPC_CHANNELS.prepareCloseFinished, (event, success: unknown) => {
     if (!mainWindow || event.sender !== mainWindow.webContents || !closePreparationPending) return
 
-    closePreparationPending = false
+    clearClosePreparation()
     if (success !== true) {
       quitRequested = false
       return
@@ -409,20 +526,7 @@ function registerIpcHandlers(): void {
 async function readExternalDocuments(
   filePaths: string[],
 ): Promise<{ documents: LineDocument[]; failures: ExternalOpenFailure[] }> {
-  const results = await Promise.all(
-    filePaths.map(async (filePath) => {
-      try {
-        return {
-          filePath,
-          document: await readDocument(filePath),
-        }
-      } catch (error) {
-        return { filePath, error }
-      }
-    }),
-  )
-
-  return partitionExternalOpenResults(results)
+  return settleDocumentReads(filePaths, readDocument)
 }
 
 function notifyExternalOpenFailures(
@@ -490,7 +594,7 @@ async function sendExternalDocuments(filePaths: string[]): Promise<void> {
 function createWindow(): BrowserWindow {
   externalFileQueue.resetRenderer()
   allowWindowClose = false
-  closePreparationPending = false
+  clearClosePreparation()
   const window = new BrowserWindow({
     width: 1520,
     height: 960,
@@ -519,32 +623,49 @@ function createWindow(): BrowserWindow {
     }
     if (closePreparationPending) return
 
-    const response = dialog.showMessageBoxSync(window, {
-      type: 'warning',
-      buttons: [...UNSAVED_CLOSE_BUTTONS],
-      defaultId: 0,
-      cancelId: 1,
-      title: 'Save changes before closing?',
-      message: 'Save changes to files before closing?',
-      detail: "If you close without saving, your changes will remain in Line's library but will not be written to their files.",
-      noLink: true,
-    })
-    const action = resolveUnsavedCloseAction(response)
-
-    if (action === 'cancel') {
-      quitRequested = false
-      return
-    }
-
+    // Hold the page's prevent-unload, show the sheet async, then prepare close.
+    // Avoid showMessageBoxSync which blocks the whole main process.
     closePreparationPending = true
-    window.webContents.send(
-      IPC_CHANNELS.prepareClose,
-      action === 'save' ? 'save' : 'preserve',
-    )
+    void dialog
+      .showMessageBox(window, {
+        type: 'warning',
+        buttons: [...UNSAVED_CLOSE_BUTTONS],
+        defaultId: 0,
+        cancelId: 1,
+        title: 'Save changes before closing?',
+        message: 'Save changes to files before closing?',
+        detail:
+          "If you close without saving, your changes will remain in Line's library but will not be written to their files.",
+        noLink: true,
+      })
+      .then(({ response }) => {
+        if (window.isDestroyed()) {
+          clearClosePreparation()
+          return
+        }
+
+        const action = resolveUnsavedCloseAction(response)
+        if (action === 'cancel') {
+          clearClosePreparation()
+          quitRequested = false
+          return
+        }
+
+        armClosePreparationTimeout()
+        window.webContents.send(
+          IPC_CHANNELS.prepareClose,
+          action === 'save' ? 'save' : 'preserve',
+        )
+      })
+      .catch(() => {
+        clearClosePreparation()
+        quitRequested = false
+      })
   })
   window.on('closed', () => {
     if (mainWindow === window) {
       mainWindow = null
+      clearClosePreparation()
       externalFileQueue.resetRenderer()
     }
   })
