@@ -6,7 +6,7 @@ import { LatestTaskQueue } from './latestTaskQueue'
 import type { LineDocument } from './lineDocument'
 import { loadPersistedDocuments, removeLegacyDemoDocuments, savePersistedDocuments } from './persistedLibrary'
 import { resolveSelectionAfterDocumentsChange } from './selection'
-import { saveDocumentsBeforeClose } from './saveBeforeClose'
+import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
 
 type EditorMode = 'edit' | 'split' | 'preview'
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
@@ -579,11 +579,10 @@ export default function App() {
 
   const saveDocument = useCallback(async (saveAs = false, saveCopy = false, defaultToDocuments = false) => {
     if (!selectedDocument) return false
-    const needsLink = !selectedDocument.path
     return saveDocumentRequest({
       defaultToDocuments,
       document: selectedDocument,
-      saveAs: saveAs || needsLink,
+      saveAs: resolveSaveAs(selectedDocument.path, saveAs),
       saveCopy,
     })
   }, [saveDocumentRequest, selectedDocument])
@@ -653,7 +652,7 @@ export default function App() {
         return saveDocumentRequest({
           defaultToDocuments: false,
           document: documentToSave,
-          saveAs: false,
+          saveAs: resolveSaveAs(documentToSave.path),
           saveCopy: false,
         })
       }, () => {

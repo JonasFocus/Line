@@ -998,7 +998,6 @@ textarea:focus-visible {
 @media (max-width: 1480px) {
   .app-shell { grid-template-columns: 260px 300px minmax(430px, 1fr) 300px; }
   .app-shell.inspector-hidden { grid-template-columns: 260px 300px minmax(430px, 1fr); }
-  .save-status span { display: none; }
 }
 
 @media (max-width: 1180px) {
