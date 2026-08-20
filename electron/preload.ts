@@ -27,14 +27,34 @@ function subscribe<T>(
 const createBlankDocument = () =>
   ipcRenderer.invoke(IPC_CHANNELS.createBlank) as Promise<LineDocument>
 
-const openFiles = (options?: OpenFilesOptions) =>
+const chooseOpenFiles = (options?: OpenFilesOptions) =>
   ipcRenderer.invoke(
-    IPC_CHANNELS.openFiles,
+    IPC_CHANNELS.chooseOpenFiles,
     options,
+  ) as Promise<string[]>
+
+const readOpenFiles = (filePaths: string[]) =>
+  ipcRenderer.invoke(
+    IPC_CHANNELS.readOpenFiles,
+    filePaths,
   ) as Promise<OpenFilesResult>
+
+const openFiles = async (options?: OpenFilesOptions) => {
+  const filePaths = await chooseOpenFiles(options)
+  if (filePaths.length === 0) {
+    return { documents: [] }
+  }
+  return readOpenFiles(filePaths)
+}
 
 const saveFile = (input: SaveFileInput) =>
   ipcRenderer.invoke(IPC_CHANNELS.saveFile, input) as Promise<LineDocument>
+
+const chooseSaveFileAs = (input: SaveFileAsInput) =>
+  ipcRenderer.invoke(
+    IPC_CHANNELS.chooseSaveFileAs,
+    input,
+  ) as Promise<string | null>
 
 const saveFileAs = (input: SaveFileAsInput) =>
   ipcRenderer.invoke(
@@ -45,6 +65,8 @@ const saveFileAs = (input: SaveFileAsInput) =>
 const api: LineApi = Object.freeze({
   createBlankDocument,
   createDocument: createBlankDocument,
+  chooseOpenFiles,
+  readOpenFiles,
   openFiles,
   importMarkdown: async () => {
     const { documents, error } = await openFiles({ multiple: false })
@@ -54,6 +76,7 @@ const api: LineApi = Object.freeze({
     return documents[0] ?? null
   },
   saveFile,
+  chooseSaveFileAs,
   saveFileAs,
   saveDocument: (
     input: SaveFileAsInput & {

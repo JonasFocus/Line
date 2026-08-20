@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import type { LineDocument } from '../src/lineDocument'
 import {
+  LIBRARY_PERSIST_FAILED_MESSAGE,
   LIBRARY_STORAGE_KEY,
   loadPersistedDocuments,
   removeDocumentFromLibrary,
@@ -245,6 +246,19 @@ describe('savePersistedDocuments', () => {
     expect(savePersistedDocuments(() => ({
       setItem: () => { throw new Error('quota exceeded') },
     }), [fallback])).toBe(false)
+  })
+
+  it('exposes the existing persist-failed banner copy for debounce and beforeunload', () => {
+    expect(LIBRARY_PERSIST_FAILED_MESSAGE).toBe(
+      'Line could not preserve your changes. Save them before closing.',
+    )
+    expect(
+      savePersistedDocuments(() => ({
+        setItem: () => {
+          throw new Error('quota exceeded')
+        },
+      }), [fallback]),
+    ).toBe(false)
   })
 
   it('reports storage accessor failures so dirty unloads remain blocked', () => {

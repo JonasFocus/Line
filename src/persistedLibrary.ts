@@ -3,6 +3,11 @@ import type { LineDocument } from './lineDocument'
 
 export const LIBRARY_STORAGE_KEY = 'line.library.v1'
 
+/** Banner copy when session library write fails (debounce, beforeunload, or close preserve). */
+export const LIBRARY_PERSIST_FAILED_MESSAGE =
+  'Line could not preserve your changes. Save them before closing.'
+
+
 const LEGACY_DEMO_DOCUMENT_IDS = new Set([
   'dark-matter-dark-energy',
   'incomplete-guide-universe',
