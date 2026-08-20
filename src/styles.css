@@ -1011,8 +1011,10 @@ textarea:focus-visible {
 
 @media (max-width: 920px) {
   .app-shell,
-  .app-shell.inspector-hidden { grid-template-columns: 280px minmax(430px, 1fr); }
-  .sidebar { display: none; }
+  .app-shell.inspector-hidden {
+    grid-template-columns: minmax(140px, 180px) minmax(160px, 220px) minmax(280px, 1fr);
+    overflow-x: auto;
+  }
   .workspace-title-wrap { display: none; }
   .workspace-toolbar { grid-template-columns: 1fr auto; }
   .workspace-center { justify-self: start; }
@@ -1020,13 +1022,13 @@ textarea:focus-visible {
 
 @media (max-width: 700px) {
   .app-shell,
-  .app-shell.inspector-hidden { grid-template-columns: 1fr; }
-  .document-pane { display: none; }
+  .app-shell.inspector-hidden {
+    grid-template-columns: minmax(120px, 150px) minmax(140px, 180px) minmax(240px, 1fr);
+    overflow-x: auto;
+  }
   .workspace-toolbar { padding-left: 12px; }
   .workspace-actions .save-status,
   .workspace-actions .icon-button:nth-of-type(3) { display: none; }
-  .mode-split .source-column { display: none; }
-  .editor-shell.mode-split { grid-template-columns: 1fr; }
   .preview-column { padding-right: 28px; padding-left: 28px; }
   .markdown-source { width: calc(100% - 48px); }
 }

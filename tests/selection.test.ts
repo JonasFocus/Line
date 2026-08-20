@@ -18,13 +18,23 @@ describe('resolveVisibleSelection', () => {
   it('clears the selection when no documents are visible', () => {
     expect(resolveVisibleSelection('hidden', [])).toBeNull()
   })
+})
 
-  it('preserves an edited document that stops matching the active filters', () => {
+describe('resolveSelectionAfterDocumentsChange', () => {
+  it('preserves an open document that is absent from the filtered library list', () => {
     expect(resolveSelectionAfterDocumentsChange(
       'draft',
       ['draft', 'other'],
       ['other'],
     )).toBe('draft')
+  })
+
+  it('preserves the open document when search or tag filters hide every match', () => {
+    expect(resolveSelectionAfterDocumentsChange(
+      'open-note',
+      ['open-note', 'other'],
+      [],
+    )).toBe('open-note')
   })
 
   it('falls back to a visible document when the selected document is removed', () => {
@@ -33,5 +43,13 @@ describe('resolveVisibleSelection', () => {
       ['first', 'second'],
       ['second'],
     )).toBe('second')
+  })
+
+  it('clears the selection when the open document is removed and nothing remains visible', () => {
+    expect(resolveSelectionAfterDocumentsChange(
+      'removed',
+      [],
+      [],
+    )).toBeNull()
   })
 })
