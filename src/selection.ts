@@ -20,3 +20,12 @@ export function resolveSelectionAfterDocumentsChange(
 
   return resolveVisibleSelection(selectedId, visibleIds)
 }
+
+/** Drop a tag filter when that tag no longer exists on any document. */
+export function resolveActiveTag(
+  activeTag: string | null,
+  availableTags: readonly string[],
+): string | null {
+  if (!activeTag) return null
+  return availableTags.includes(activeTag) ? activeTag : null
+}
