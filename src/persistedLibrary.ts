@@ -29,6 +29,20 @@ export function removeDocumentFromLibrary(
   return documents.filter((document) => document.id !== documentId)
 }
 
+/** Re-insert a library entry that was removed in-memory (not a disk restore). */
+export function restoreDocumentToLibrary(
+  documents: readonly LineDocument[],
+  document: LineDocument,
+  index = documents.length,
+): LineDocument[] {
+  if (documents.some((item) => item.id === document.id)) return [...documents]
+
+  const next = [...documents]
+  const insertAt = Math.max(0, Math.min(index, next.length))
+  next.splice(insertAt, 0, document)
+  return next
+}
+
 function normalizeDocument(value: unknown): LineDocument | null {
   if (!value || typeof value !== 'object') return null
 

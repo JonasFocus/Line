@@ -6,6 +6,7 @@ import {
   loadPersistedDocuments,
   removeDocumentFromLibrary,
   removeLegacyDemoDocuments,
+  restoreDocumentToLibrary,
   restorePersistedDocuments,
   savePersistedDocuments,
 } from '../src/persistedLibrary'
@@ -189,6 +190,24 @@ describe('removeDocumentFromLibrary', () => {
     const documents = [{ ...fallback, id: 'only' }]
 
     expect(removeDocumentFromLibrary(documents, 'missing')).toEqual(documents)
+  })
+})
+
+describe('restoreDocumentToLibrary', () => {
+  it('re-inserts the document at the original index with the same fields', () => {
+    const first = { ...fallback, id: 'first', title: 'First', path: '/tmp/first.md' }
+    const middle = { ...fallback, id: 'middle', title: 'Middle', path: '/tmp/middle.md', dirty: true }
+    const last = { ...fallback, id: 'last', title: 'Last' }
+
+    expect(restoreDocumentToLibrary([first, last], middle, 1)).toEqual([first, middle, last])
+  })
+
+  it('appends when no index is given and skips when the id is already present', () => {
+    const keep = { ...fallback, id: 'keep', title: 'Keep' }
+    const restored = { ...fallback, id: 'restored', title: 'Restored' }
+
+    expect(restoreDocumentToLibrary([keep], restored)).toEqual([keep, restored])
+    expect(restoreDocumentToLibrary([keep, restored], { ...restored, title: 'Other' })).toEqual([keep, restored])
   })
 })
 
