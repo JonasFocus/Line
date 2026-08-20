@@ -4,7 +4,7 @@ import { extractOutline, MarkdownPreview, type OutlineItem } from './components/
 import { parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
 import type { LineDocument } from './lineDocument'
-import { loadPersistedDocuments, removeDocumentFromLibrary, removeLegacyDemoDocuments, savePersistedDocuments } from './persistedLibrary'
+import { loadPersistedDocuments, removeDocumentFromLibrary, removeLegacyDemoDocuments, restoreDocumentToLibrary, savePersistedDocuments } from './persistedLibrary'
 import { resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
 import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
@@ -15,6 +15,14 @@ type SaveRequest = {
   document: LineDocument
   saveAs: boolean
   saveCopy: boolean
+}
+type ToastState = {
+  message: string
+  actionLabel?: string
+}
+type PendingLibraryUndo = {
+  document: LineDocument
+  index: number
 }
 
 function formatDate(value: string | null | undefined) {
@@ -345,10 +353,11 @@ export default function App() {
   const [saveState, setSaveState] = useState<SaveState>(() => resolveSaveState(readPersistedDocuments()[0]))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<ToastState | null>(null)
   const [activeOutlineId, setActiveOutlineId] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const toastTimer = useRef<number | null>(null)
+  const pendingLibraryUndoRef = useRef<PendingLibraryUndo | null>(null)
   const saveQueueRef = useRef(new LatestTaskQueue<SaveRequest>())
   const closeReadyRef = useRef(false)
   const externalFilesReadyRef = useRef(false)
@@ -361,10 +370,14 @@ export default function App() {
   const selectedDocument = documents.find((document) => document.id === selectedId) || null
   const outline = useMemo(() => extractOutline(selectedDocument?.content || ''), [selectedDocument?.content])
 
-  const showToast = useCallback((message: string) => {
-    setToast(message)
+  const showToast = useCallback((message: string, options?: { actionLabel?: string; undo?: PendingLibraryUndo }) => {
+    pendingLibraryUndoRef.current = options?.undo ?? null
+    setToast({ message, actionLabel: options?.actionLabel })
     if (toastTimer.current) window.clearTimeout(toastTimer.current)
-    toastTimer.current = window.setTimeout(() => setToast(null), 2600)
+    toastTimer.current = window.setTimeout(() => {
+      pendingLibraryUndoRef.current = null
+      setToast(null)
+    }, 2600)
   }, [])
 
   const acceptExternalDocuments = useCallback((externalDocuments: unknown[]) => {
@@ -421,6 +434,20 @@ export default function App() {
     setSaveState(reconcileSaveState('idle', nextDocument, true))
     setActiveOutlineId(null)
   }, [])
+
+  const restoreLastLibraryRemove = useCallback(() => {
+    const pending = pendingLibraryUndoRef.current
+    if (!pending || closeReadyRef.current) return
+
+    pendingLibraryUndoRef.current = null
+    if (toastTimer.current) window.clearTimeout(toastTimer.current)
+    setToast(null)
+
+    const nextDocuments = restoreDocumentToLibrary(documentsRef.current, pending.document, pending.index)
+    documentsRef.current = nextDocuments
+    setDocuments(nextDocuments)
+    synchronizeSelection(pending.document.id)
+  }, [synchronizeSelection])
 
   const updateDocument = useCallback((change: Partial<LineDocument>) => {
     if (!selectedId || closeReadyRef.current) return
@@ -779,9 +806,17 @@ export default function App() {
         onNew={createDocument}
         onRemove={(id) => {
           if (closeReadyRef.current) return
-          const nextDocuments = removeDocumentFromLibrary(documentsRef.current, id)
+          const currentDocuments = documentsRef.current
+          const index = currentDocuments.findIndex((document) => document.id === id)
+          if (index < 0) return
+          const removed = currentDocuments[index]
+          const nextDocuments = removeDocumentFromLibrary(currentDocuments, id)
           documentsRef.current = nextDocuments
           setDocuments(nextDocuments)
+          showToast('Removed from library', {
+            actionLabel: 'Restore',
+            undo: { document: removed, index },
+          })
         }}
         onSearch={setSearch}
         onSelect={synchronizeSelection}
@@ -832,7 +867,16 @@ export default function App() {
           <button aria-label="Dismiss error" className="error-dismiss" onClick={() => setError(null)} type="button"><Icon name="close" size={14} /></button>
         </div>
       )}
-      {toast && <div className="toast" role="status">{toast}</div>}
+      {toast && (
+        <div className="toast" role="status">
+          <span>{toast.message}</span>
+          {toast.actionLabel && (
+            <button className="toast-action" onClick={restoreLastLibraryRemove} type="button">
+              {toast.actionLabel}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }
