@@ -5,7 +5,7 @@ import { parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
 import type { LineDocument } from './lineDocument'
 import { loadPersistedDocuments, removeLegacyDemoDocuments, savePersistedDocuments } from './persistedLibrary'
-import { resolveSelectionAfterDocumentsChange } from './selection'
+import { resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
 
 type EditorMode = 'edit' | 'split' | 'preview'
@@ -145,16 +145,19 @@ function Sidebar({ documents, activeFilter, activeTag, onFilter, onTag, onOpenFo
   )
 }
 
-function DocumentList({ documents, selectedId, search, onSearch, onSelect, onFavorite, onNew, onImport }: {
+function DocumentList({ documents, selectedId, search, activeTag, onSearch, onSelect, onFavorite, onNew, onImport }: {
   documents: LineDocument[]
   selectedId: string | null
   search: string
+  activeTag: string | null
   onSearch: (value: string) => void
   onSelect: (id: string) => void
   onFavorite: (id: string) => void
   onNew: () => void
   onImport: () => void
 }) {
+  const isFiltered = Boolean(search || activeTag)
+
   return (
     <section className="document-pane pane">
       <header className="document-toolbar titlebar-region">
@@ -199,9 +202,9 @@ function DocumentList({ documents, selectedId, search, onSearch, onSelect, onFav
         )) : (
           <div className="empty-state">
             <span className="empty-icon"><Icon name="document" size={22} /></span>
-            <strong>{search ? 'No matching files' : 'No Markdown files yet'}</strong>
-            <p>{search ? 'Try another search.' : 'Create a blank file or open Markdown from your Mac.'}</p>
-            {!search && <div className="empty-actions"><button onClick={onNew} type="button">Create file</button><button onClick={onImport} type="button">Open file</button></div>}
+            <strong>{isFiltered ? 'No matching files' : 'No Markdown files yet'}</strong>
+            <p>{isFiltered ? 'Try another search.' : 'Create a blank file or open Markdown from your Mac.'}</p>
+            {!isFiltered && <div className="empty-actions"><button onClick={onNew} type="button">Create file</button><button onClick={onImport} type="button">Open file</button></div>}
           </div>
         )}
       </div>
@@ -399,6 +402,14 @@ export default function App() {
       return `${document.title} ${document.content} ${document.tags.join(' ')}`.toLowerCase().includes(query)
     })
   }, [documents, activeFilter, activeTag, search])
+
+  // Tags are live-derived from documents. Clear a ghost filter when the tag
+  // disappears from every note (sidebar tags section may unmount entirely).
+  useEffect(() => {
+    const availableTags = Array.from(new Set(documents.flatMap((document) => document.tags)))
+    const nextTag = resolveActiveTag(activeTag, availableTags)
+    if (nextTag !== activeTag) setActiveTag(nextTag)
+  }, [documents, activeTag])
 
   const synchronizeSelection = useCallback((nextSelectedId: string | null) => {
     if (nextSelectedId === selectedIdRef.current) return
@@ -744,12 +755,14 @@ export default function App() {
             setSearch('')
           } else {
             setActiveFilter(filter)
+            if (filter === 'all') setActiveTag(null)
           }
         }}
         onOpenFolder={openFolder}
         onTag={setActiveTag}
       />
       <DocumentList
+        activeTag={activeTag}
         documents={filteredDocuments}
         onFavorite={(id) => {
           if (closeReadyRef.current) return

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveSelectionAfterDocumentsChange, resolveVisibleSelection } from '../src/selection'
+import { resolveActiveTag, resolveSelectionAfterDocumentsChange, resolveVisibleSelection } from '../src/selection'
 
 describe('resolveVisibleSelection', () => {
   it('preserves the selected document while it remains visible', () => {
@@ -51,5 +51,23 @@ describe('resolveSelectionAfterDocumentsChange', () => {
       [],
       [],
     )).toBeNull()
+  })
+})
+
+describe('resolveActiveTag', () => {
+  it('keeps an active tag that still exists on a document', () => {
+    expect(resolveActiveTag('draft', ['notes', 'draft'])).toBe('draft')
+  })
+
+  it('clears a ghost tag that no longer exists on any document', () => {
+    expect(resolveActiveTag('gone', ['notes'])).toBeNull()
+  })
+
+  it('clears a ghost tag when the library has no tags left', () => {
+    expect(resolveActiveTag('gone', [])).toBeNull()
+  })
+
+  it('leaves an unset tag filter alone', () => {
+    expect(resolveActiveTag(null, ['notes'])).toBeNull()
   })
 })
