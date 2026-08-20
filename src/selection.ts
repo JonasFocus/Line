@@ -38,3 +38,13 @@ export function resolveActiveFilter(
   if (activeFilter === 'unlinked' && !hasUnlinked) return 'all'
   return activeFilter
 }
+
+/** Library pane heading for the live Unlinked / tag / default filter. */
+export function libraryPaneHeading(
+  activeFilter: string,
+  activeTag: string | null,
+): string {
+  if (activeFilter === 'unlinked') return 'Unlinked'
+  if (activeTag) return `#${activeTag}`
+  return 'Library'
+}
