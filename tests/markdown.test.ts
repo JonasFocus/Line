@@ -72,6 +72,11 @@ Two.
 });
 
 describe("Markdown rendering", () => {
+  it("renders nothing for empty markdown so the preview :empty placeholder can show", () => {
+    expect(renderMarkdown("")).toBe("");
+    expect(renderMarkdown("  \n\t\n")).toBe("");
+  });
+
   it("renders the supported block and inline syntax", () => {
     const html = renderMarkdown(`# Hello
 
