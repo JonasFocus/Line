@@ -5,7 +5,7 @@ import { parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
 import { documentIsUnlinked, type LineDocument } from './lineDocument'
 import { loadPersistedDocuments, removeDocumentFromLibrary, removeLegacyDemoDocuments, restoreDocumentToLibrary, savePersistedDocuments } from './persistedLibrary'
-import { resolveActiveFilter, resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
+import { libraryPaneHeading, resolveActiveFilter, resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
 import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
 
@@ -134,7 +134,7 @@ function Sidebar({ documents, activeFilter, activeTag, onFilter, onTag, onOpenFo
 
         <section className="nav-section">
           <p className="section-label">Documents</p>
-          <button className={`nav-row ${activeFilter === 'all' ? 'selected' : ''}`} onClick={() => onFilter('all')} type="button">
+          <button className={`nav-row ${activeFilter === 'all' && !activeTag ? 'selected' : ''}`} onClick={() => onFilter('all')} type="button">
             <span className="chevron-spacer" /><Icon name="grid" size={16} /><span>All Documents</span><small>{documents.length}</small>
           </button>
           {unlinkedCount > 0 && (
@@ -176,7 +176,7 @@ function DocumentList({ documents, selectedId, search, activeFilter, activeTag, 
   return (
     <section className="document-pane pane">
       <header className="document-toolbar titlebar-region">
-        <div className="document-heading">Library</div>
+        <div className="document-heading">{libraryPaneHeading(activeFilter, activeTag)}</div>
         <div className="toolbar-group no-drag">
           <PlainButton icon="newDocument" label="New document" onClick={onNew} />
           <PlainButton icon="import" label="Import Markdown" onClick={onImport} />

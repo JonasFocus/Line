@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  libraryPaneHeading,
   resolveActiveFilter,
   resolveActiveTag,
   resolveSelectionAfterDocumentsChange,
@@ -97,5 +98,23 @@ describe('resolveActiveFilter', () => {
   it('leaves other filters alone', () => {
     expect(resolveActiveFilter('all', false)).toBe('all')
     expect(resolveActiveFilter('doc:abc', false)).toBe('doc:abc')
+  })
+})
+
+describe('libraryPaneHeading', () => {
+  it('names Unlinked when that filter is on', () => {
+    expect(libraryPaneHeading('unlinked', null)).toBe('Unlinked')
+  })
+
+  it('prefers Unlinked over a concurrent tag', () => {
+    expect(libraryPaneHeading('unlinked', 'draft')).toBe('Unlinked')
+  })
+
+  it('names the active tag with a hash', () => {
+    expect(libraryPaneHeading('all', 'draft')).toBe('#draft')
+  })
+
+  it('falls back to Library when no Unlinked or tag filter is on', () => {
+    expect(libraryPaneHeading('all', null)).toBe('Library')
   })
 })
