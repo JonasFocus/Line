@@ -7,6 +7,7 @@ import { documentIsUnlinked, type LineDocument } from './lineDocument'
 import { loadPersistedDocuments, removeDocumentFromLibrary, removeLegacyDemoDocuments, restoreDocumentToLibrary, savePersistedDocuments } from './persistedLibrary'
 import { resolveActiveFilter, resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
+import { shouldFocusLibrarySearchOnFind } from './findShortcut'
 import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
 
 type EditorMode = 'edit' | 'split' | 'preview'
@@ -766,6 +767,7 @@ export default function App() {
       if (event.key.toLowerCase() === 'o') { event.preventDefault(); void importDocument() }
       if (event.key.toLowerCase() === 's') { event.preventDefault(); void saveDocument(event.shiftKey) }
       if (event.key.toLowerCase() === 'f' && !event.shiftKey) {
+        if (!shouldFocusLibrarySearchOnFind(event.target, document.activeElement)) return
         event.preventDefault()
         const input = document.querySelector<HTMLInputElement>('.document-search input')
         input?.focus()
