@@ -107,7 +107,7 @@ function Sidebar({ documents, activeFilter, activeTag, onFilter, onTag, onOpenFo
   onTag: (tag: string | null) => void
   onOpenFolder: () => void
 }) {
-  const favorites = documents.filter((doc) => doc.favorite).slice(0, 4)
+  const favorites = documents.filter((doc) => doc.favorite)
   const tags = Array.from(new Set(documents.flatMap((doc) => doc.tags)))
   const unlinkedCount = documents.filter(documentIsUnlinked).length
 
