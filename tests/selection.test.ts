@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   libraryPaneHeading,
+  nextExclusiveLibraryFilter,
   resolveActiveFilter,
   resolveActiveTag,
   resolveSelectionAfterDocumentsChange,
@@ -116,5 +117,42 @@ describe('libraryPaneHeading', () => {
 
   it('falls back to Library when no Unlinked or tag filter is on', () => {
     expect(libraryPaneHeading('all', null)).toBe('Library')
+  })
+})
+
+describe('nextExclusiveLibraryFilter', () => {
+  it('clears the tag when choosing Unlinked', () => {
+    expect(nextExclusiveLibraryFilter(
+      { activeFilter: 'all', activeTag: 'draft' },
+      { filter: 'unlinked' },
+    )).toEqual({ activeFilter: 'unlinked', activeTag: null })
+  })
+
+  it('clears the tag when choosing All Documents', () => {
+    expect(nextExclusiveLibraryFilter(
+      { activeFilter: 'unlinked', activeTag: 'draft' },
+      { filter: 'all' },
+    )).toEqual({ activeFilter: 'all', activeTag: null })
+  })
+
+  it('clears Unlinked when choosing a tag', () => {
+    expect(nextExclusiveLibraryFilter(
+      { activeFilter: 'unlinked', activeTag: null },
+      { tag: 'draft' },
+    )).toEqual({ activeFilter: 'all', activeTag: 'draft' })
+  })
+
+  it('keeps Unlinked when choosing All Tags', () => {
+    expect(nextExclusiveLibraryFilter(
+      { activeFilter: 'unlinked', activeTag: null },
+      { tag: null },
+    )).toEqual({ activeFilter: 'unlinked', activeTag: null })
+  })
+
+  it('clears only the tag when All Tags is chosen over a tag', () => {
+    expect(nextExclusiveLibraryFilter(
+      { activeFilter: 'all', activeTag: 'draft' },
+      { tag: null },
+    )).toEqual({ activeFilter: 'all', activeTag: null })
   })
 })

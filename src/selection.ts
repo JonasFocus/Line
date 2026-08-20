@@ -48,3 +48,35 @@ export function libraryPaneHeading(
   if (activeTag) return `#${activeTag}`
   return 'Library'
 }
+
+type LibraryFilterTag = {
+  activeFilter: string
+  activeTag: string | null
+}
+
+/**
+ * Next Unlinked / tag pair so only one named filter is live.
+ * All Documents and Unlinked clear the tag; a tag clears Unlinked.
+ * All Tags (null) only clears the tag.
+ */
+export function nextExclusiveLibraryFilter(
+  current: LibraryFilterTag,
+  change: { filter: string } | { tag: string | null },
+): LibraryFilterTag {
+  if ('filter' in change) {
+    const { filter } = change
+    if (filter === 'all' || filter === 'unlinked') {
+      return { activeFilter: filter, activeTag: null }
+    }
+    return { activeFilter: filter, activeTag: current.activeTag }
+  }
+
+  if (change.tag === null) {
+    return { activeFilter: current.activeFilter, activeTag: null }
+  }
+
+  return {
+    activeFilter: current.activeFilter === 'unlinked' ? 'all' : current.activeFilter,
+    activeTag: change.tag,
+  }
+}

@@ -5,7 +5,7 @@ import { parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
 import { documentIsUnlinked, type LineDocument } from './lineDocument'
 import { loadPersistedDocuments, removeDocumentFromLibrary, removeLegacyDemoDocuments, restoreDocumentToLibrary, savePersistedDocuments } from './persistedLibrary'
-import { libraryPaneHeading, resolveActiveFilter, resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
+import { libraryPaneHeading, nextExclusiveLibraryFilter, resolveActiveFilter, resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
 import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
 
@@ -807,13 +807,24 @@ export default function App() {
             setActiveFilter('all')
             setActiveTag(null)
             setSearch('')
-          } else {
-            setActiveFilter(filter)
-            if (filter === 'all') setActiveTag(null)
+            return
           }
+          const next = nextExclusiveLibraryFilter(
+            { activeFilter, activeTag },
+            { filter },
+          )
+          setActiveFilter(next.activeFilter)
+          setActiveTag(next.activeTag)
         }}
         onOpenFolder={openFolder}
-        onTag={setActiveTag}
+        onTag={(tag) => {
+          const next = nextExclusiveLibraryFilter(
+            { activeFilter, activeTag },
+            { tag },
+          )
+          setActiveFilter(next.activeFilter)
+          setActiveTag(next.activeTag)
+        }}
       />
       <DocumentList
         activeFilter={activeFilter}
