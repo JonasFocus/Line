@@ -6,7 +6,7 @@
 
 <p align="center">
   Personal Markdown notes for macOS.<br>
-  <sub>Electron · React 19 · TypeScript · Vite · v1.0.1</sub>
+  <sub>Electron · React 19 · TypeScript · Vite · v2.0.0</sub>
 </p>
 
 <p align="center">
@@ -56,6 +56,11 @@ npm run dist
 
 ## Changelog
 
+### 2.0.0 (2026-08-20)
+
+- Honest markdown image preview for `http(s)` and root-relative sources. Rejects `javascript:` and `data:`.
+- Starred sidebar shows every favorite. No four-item cap.
+
 ### 1.0.1 (2026-08-20)
 
 Honesty and feel after the first public build.
@@ -76,7 +81,7 @@ Honesty and feel after the first public build.
 - Snappier list entrance (no stagger).
 - Open/save honesty: partial open, persist-fail banner, Saving only after a chosen path, async close.
 
-### 1.0.0 · 2026-07-14
+### 1.0.0 (2026-07-14)
 
 First public release.
 
@@ -86,10 +91,3 @@ First public release.
 - Atomic, conflict-aware disk saves.
 - Unsaved-close dialog.
 - Finder opens and macOS title bar chrome.
-
-### Main after 1.0.1
-
-Shipped on main, not yet cut as a new version.
-
-- Honest markdown image preview (`http(s)` and root-relative; reject `javascript:` / `data:`).
-- Starred sidebar shows every favorite (no slice to four).
