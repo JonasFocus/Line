@@ -5,6 +5,12 @@ describe('resolveSaveAs', () => {
   it('forces Save As when the document has no path', () => {
     expect(resolveSaveAs(null)).toBe(true)
     expect(resolveSaveAs(null, false)).toBe(true)
+    expect(resolveSaveAs(undefined)).toBe(true)
+  })
+
+  it('forces Save As when the path is an empty string', () => {
+    expect(resolveSaveAs('')).toBe(true)
+    expect(resolveSaveAs('', false)).toBe(true)
   })
 
   it('keeps normal Save when the document is already linked', () => {

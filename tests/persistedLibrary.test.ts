@@ -185,6 +185,20 @@ describe('removeDocumentFromLibrary', () => {
     expect(removeDocumentFromLibrary([keep, drop], 'drop')).toEqual([keep])
   })
 
+  it('removing the selected id leaves the remaining documents', () => {
+    const selected = { ...fallback, id: 'selected', title: 'Selected' }
+    const other = { ...fallback, id: 'other', title: 'Other' }
+    const third = { ...fallback, id: 'third', title: 'Third' }
+
+    expect(removeDocumentFromLibrary([selected, other, third], 'selected')).toEqual([other, third])
+  })
+
+  it('removing the last library item yields an empty list', () => {
+    const only = { ...fallback, id: 'only', title: 'Only' }
+
+    expect(removeDocumentFromLibrary([only], 'only')).toEqual([])
+  })
+
   it('returns the same list when the id is absent', () => {
     const documents = [{ ...fallback, id: 'only' }]
 

@@ -46,10 +46,22 @@ describe('resolveSaveChipLabel', () => {
     expect(resolveSaveChipLabel({ path: '/tmp/note.md' }, 'idle')).toBe('Saved')
   })
 
+  it('never shows a false Saved for dirty or unlinked notes', () => {
+    expect(resolveSaveChipLabel({ path: '/tmp/note.md' }, 'dirty')).not.toBe('Saved')
+    expect(resolveSaveChipLabel({ path: null }, 'idle')).not.toBe('Saved')
+    expect(resolveSaveChipLabel({ path: null }, 'saved')).not.toBe('Saved')
+    expect(resolveSaveChipLabel({ path: '' }, 'idle')).not.toBe('Saved')
+  })
+
   it('keeps unlinked copy for dirty drafts', () => {
     expect(resolveSaveChipLabel({ path: null }, 'dirty')).toBe('Not linked — Save As')
     expect(resolveSaveChipLabel({ path: null }, 'idle')).toBe('Not linked — Save As')
     expect(resolveSaveChipLabel({ path: null }, 'saved')).toBe('Not linked — Save As')
+  })
+
+  it('labels unlinked notes as Not linked — Save As', () => {
+    expect(resolveSaveChipLabel({ path: null }, 'idle')).toBe('Not linked — Save As')
+    expect(resolveSaveChipLabel({ path: '' }, 'dirty')).toBe('Not linked — Save As')
   })
 
   it('shows Saving and Retry over the unlinked label', () => {
