@@ -29,3 +29,12 @@ export function resolveActiveTag(
   if (!activeTag) return null
   return availableTags.includes(activeTag) ? activeTag : null
 }
+
+/** Drop the Unlinked filter when no session-only notes remain. */
+export function resolveActiveFilter(
+  activeFilter: string,
+  hasUnlinked: boolean,
+): string {
+  if (activeFilter === 'unlinked' && !hasUnlinked) return 'all'
+  return activeFilter
+}

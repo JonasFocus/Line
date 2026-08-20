@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveActiveTag, resolveSelectionAfterDocumentsChange, resolveVisibleSelection } from '../src/selection'
+import {
+  resolveActiveFilter,
+  resolveActiveTag,
+  resolveSelectionAfterDocumentsChange,
+  resolveVisibleSelection,
+} from '../src/selection'
 
 describe('resolveVisibleSelection', () => {
   it('preserves the selected document while it remains visible', () => {
@@ -69,5 +74,20 @@ describe('resolveActiveTag', () => {
 
   it('leaves an unset tag filter alone', () => {
     expect(resolveActiveTag(null, ['notes'])).toBeNull()
+  })
+})
+
+describe('resolveActiveFilter', () => {
+  it('keeps Unlinked while session-only notes remain', () => {
+    expect(resolveActiveFilter('unlinked', true)).toBe('unlinked')
+  })
+
+  it('clears Unlinked when every note gains a path', () => {
+    expect(resolveActiveFilter('unlinked', false)).toBe('all')
+  })
+
+  it('leaves other filters alone', () => {
+    expect(resolveActiveFilter('all', false)).toBe('all')
+    expect(resolveActiveFilter('doc:abc', false)).toBe('doc:abc')
   })
 })
