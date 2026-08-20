@@ -4,7 +4,7 @@ import { extractOutline, MarkdownPreview, type OutlineItem } from './components/
 import { parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
 import type { LineDocument } from './lineDocument'
-import { loadPersistedDocuments, removeLegacyDemoDocuments, savePersistedDocuments } from './persistedLibrary'
+import { loadPersistedDocuments, removeDocumentFromLibrary, removeLegacyDemoDocuments, savePersistedDocuments } from './persistedLibrary'
 import { resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
 
@@ -144,7 +144,7 @@ function Sidebar({ documents, activeFilter, activeTag, onFilter, onTag, onOpenFo
   )
 }
 
-function DocumentList({ documents, selectedId, search, activeTag, onSearch, onSelect, onFavorite, onNew, onImport }: {
+function DocumentList({ documents, selectedId, search, activeTag, onSearch, onSelect, onFavorite, onRemove, onNew, onImport }: {
   documents: LineDocument[]
   selectedId: string | null
   search: string
@@ -152,6 +152,7 @@ function DocumentList({ documents, selectedId, search, activeTag, onSearch, onSe
   onSearch: (value: string) => void
   onSelect: (id: string) => void
   onFavorite: (id: string) => void
+  onRemove: (id: string) => void
   onNew: () => void
   onImport: () => void
 }) {
@@ -187,6 +188,14 @@ function DocumentList({ documents, selectedId, search, activeTag, onSearch, onSe
               </span>
               <span className="document-excerpt">{doc.content.replace(/[#>*`\n-]/g, ' ').replace(/\s+/g, ' ').trim()}</span>
               <span className="document-meta"><time>{doc.updatedAt}</time>{doc.tags.map((tag) => <small key={tag}>#{tag}</small>)}</span>
+            </button>
+            <button
+              aria-label="Remove from library"
+              className="remove-control"
+              onClick={() => onRemove(doc.id)}
+              type="button"
+            >
+              <Icon name="trash" size={14} />
             </button>
             <button
               aria-label={doc.favorite ? 'Remove from starred' : 'Add to starred'}
@@ -765,6 +774,12 @@ export default function App() {
         }}
         onImport={importDocument}
         onNew={createDocument}
+        onRemove={(id) => {
+          if (closeReadyRef.current) return
+          const nextDocuments = removeDocumentFromLibrary(documentsRef.current, id)
+          documentsRef.current = nextDocuments
+          setDocuments(nextDocuments)
+        }}
         onSearch={setSearch}
         onSelect={synchronizeSelection}
         search={search}

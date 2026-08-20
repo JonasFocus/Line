@@ -22,6 +22,13 @@ export function removeLegacyDemoDocuments(documents: readonly LineDocument[]): L
   return documents.filter((document) => !LEGACY_DEMO_DOCUMENT_IDS.has(document.id))
 }
 
+export function removeDocumentFromLibrary(
+  documents: readonly LineDocument[],
+  documentId: string,
+): LineDocument[] {
+  return documents.filter((document) => document.id !== documentId)
+}
+
 function normalizeDocument(value: unknown): LineDocument | null {
   if (!value || typeof value !== 'object') return null
 

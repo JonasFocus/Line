@@ -4,6 +4,7 @@ import type { LineDocument } from '../src/lineDocument'
 import {
   LIBRARY_STORAGE_KEY,
   loadPersistedDocuments,
+  removeDocumentFromLibrary,
   removeLegacyDemoDocuments,
   restorePersistedDocuments,
   savePersistedDocuments,
@@ -173,6 +174,21 @@ describe('removeLegacyDemoDocuments', () => {
     const realDocument = { ...fallback, id: 'my-draft', title: 'My draft' }
 
     expect(removeLegacyDemoDocuments([demo, realDocument])).toEqual([realDocument])
+  })
+})
+
+describe('removeDocumentFromLibrary', () => {
+  it('removes only the matching library entry and leaves the rest intact', () => {
+    const keep = { ...fallback, id: 'keep', title: 'Keep', path: '/tmp/keep.md' }
+    const drop = { ...fallback, id: 'drop', title: 'Drop', path: '/tmp/drop.md' }
+
+    expect(removeDocumentFromLibrary([keep, drop], 'drop')).toEqual([keep])
+  })
+
+  it('returns the same list when the id is absent', () => {
+    const documents = [{ ...fallback, id: 'only' }]
+
+    expect(removeDocumentFromLibrary(documents, 'missing')).toEqual(documents)
   })
 })
 
