@@ -203,6 +203,13 @@ function safeHref(href: string): string {
   return "#";
 }
 
+/** http(s) and root-relative paths only; unknown schemes are rejected. */
+function safeSrc(src: string): string | null {
+  const trimmed = src.trim();
+  if (/^(?:https?:|\/)/i.test(trimmed)) return escapeHtml(trimmed);
+  return null;
+}
+
 function renderInline(source: string): string {
   const codeTokens: string[] = [];
   const tokenized = source.replace(/`([^`]+)`/g, (_match, code: string) => {
@@ -212,6 +219,16 @@ function renderInline(source: string): string {
   });
   let html = escapeHtml(tokenized);
 
+  // Images before links so `![alt](src)` is not reduced to `!<a>…</a>`.
+  html = html.replace(
+    /!\[([^\]]*)]\(([^\s)]+)(?:\s+[&quot;]([^&]*)[&quot;])?\)/g,
+    (_match, alt: string, src: string, title?: string) => {
+      const safe = safeSrc(src);
+      if (safe === null) return "";
+      const titleAttribute = title ? ` title="${escapeHtml(title)}"` : "";
+      return `<img src="${safe}" alt="${alt}"${titleAttribute}>`;
+    },
+  );
   html = html.replace(
     /\[([^\]]+)]\(([^\s)]+)(?:\s+[&quot;]([^&]+)[&quot;])?\)/g,
     (_match, label: string, href: string, title?: string) => {
