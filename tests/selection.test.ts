@@ -37,6 +37,14 @@ describe('resolveSelectionAfterDocumentsChange', () => {
     )).toBe('open-note')
   })
 
+  it('keeps the open id when the filtered list is empty', () => {
+    expect(resolveSelectionAfterDocumentsChange(
+      'still-open',
+      ['still-open'],
+      [],
+    )).toBe('still-open')
+  })
+
   it('falls back to a visible document when the selected document is removed', () => {
     expect(resolveSelectionAfterDocumentsChange(
       'removed',
