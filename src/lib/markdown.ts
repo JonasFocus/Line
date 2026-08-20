@@ -221,7 +221,7 @@ function renderInline(source: string): string {
 
   // Images before links so `![alt](src)` is not reduced to `!<a>…</a>`.
   html = html.replace(
-    /!\[([^\]]*)]\(([^\s)]+)(?:\s+[&quot;]([^&]*)[&quot;])?\)/g,
+    /!\[([^\]]*)]\(([^\s)]+)(?:\s+&quot;([^&]*)&quot;)?\)/g,
     (_match, alt: string, src: string, title?: string) => {
       const safe = safeSrc(src);
       if (safe === null) return "";
@@ -230,7 +230,7 @@ function renderInline(source: string): string {
     },
   );
   html = html.replace(
-    /\[([^\]]+)]\(([^\s)]+)(?:\s+[&quot;]([^&]+)[&quot;])?\)/g,
+    /\[([^\]]+)]\(([^\s)]+)(?:\s+&quot;([^&]*)&quot;)?\)/g,
     (_match, label: string, href: string, title?: string) => {
       const titleAttribute = title ? ` title="${escapeHtml(title)}"` : "";
       return `<a href="${safeHref(href)}"${titleAttribute}>${label}</a>`;
