@@ -243,7 +243,14 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
         <div className="workspace-actions no-drag">
           <button className={`save-status ${saveState}`} onClick={onSave} type="button">
             <Icon name="save" size={16} />
-            <span>{saveState === 'saving' ? 'Saving' : saveState === 'dirty' ? 'Save' : saveState === 'error' ? 'Retry' : 'Saved'}</span>
+            <span>{
+              document && !document.path && saveState !== 'saving' && saveState !== 'error'
+                ? 'Not linked — Save As'
+                : saveState === 'saving' ? 'Saving'
+                  : saveState === 'dirty' ? 'Save'
+                    : saveState === 'error' ? 'Retry'
+                      : 'Saved'
+            }</span>
           </button>
           <PlainButton active={inspectorOpen} icon="inspector" label="Toggle inspector" onClick={onInspector} />
           <PlainButton disabled icon="share" label="Sharing is not available in this MVP" />
@@ -572,7 +579,13 @@ export default function App() {
 
   const saveDocument = useCallback(async (saveAs = false, saveCopy = false, defaultToDocuments = false) => {
     if (!selectedDocument) return false
-    return saveDocumentRequest({ defaultToDocuments, document: selectedDocument, saveAs, saveCopy })
+    const needsLink = !selectedDocument.path
+    return saveDocumentRequest({
+      defaultToDocuments,
+      document: selectedDocument,
+      saveAs: saveAs || needsLink,
+      saveCopy,
+    })
   }, [saveDocumentRequest, selectedDocument])
 
   const openFolder = importDocument
