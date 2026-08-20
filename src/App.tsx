@@ -675,6 +675,10 @@ export default function App() {
     const api = lineApi()
     const disposeMenu = api?.onMenuCommand?.(handleAction)
     const disposeExternal = api?.onExternalFilesOpened?.(acceptExternalDocuments)
+    const disposeExternalFailed = api?.onExternalOpenFailed?.((message) => {
+      if (closeReadyRef.current) return
+      setError(message)
+    })
     if (api?.readyForExternalFiles && !externalFilesReadyRef.current) {
       externalFilesReadyRef.current = true
       void api.readyForExternalFiles()
@@ -684,6 +688,7 @@ export default function App() {
     return () => {
       if (typeof disposeMenu === 'function') disposeMenu()
       if (typeof disposeExternal === 'function') disposeExternal()
+      if (typeof disposeExternalFailed === 'function') disposeExternalFailed()
     }
   }, [acceptExternalDocuments, createDocument, importDocument, saveDocument])
 
