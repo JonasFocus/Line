@@ -7,9 +7,9 @@ import type { LineDocument } from './lineDocument'
 import { loadPersistedDocuments, removeLegacyDemoDocuments, savePersistedDocuments } from './persistedLibrary'
 import { resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
+import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
 
 type EditorMode = 'edit' | 'split' | 'preview'
-type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
 type SaveRequest = {
   defaultToDocuments: boolean
   document: LineDocument
@@ -244,14 +244,7 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
         <div className="workspace-actions no-drag">
           <button className={`save-status ${saveState}`} onClick={onSave} type="button">
             <Icon name="save" size={16} />
-            <span>{
-              document && !document.path && saveState !== 'saving' && saveState !== 'error'
-                ? 'Not linked — Save As'
-                : saveState === 'saving' ? 'Saving'
-                  : saveState === 'dirty' ? 'Save'
-                    : saveState === 'error' ? 'Retry'
-                      : 'Saved'
-            }</span>
+            <span>{resolveSaveChipLabel(document, saveState)}</span>
           </button>
           <PlainButton active={inspectorOpen} icon="inspector" label="Toggle inspector" onClick={onInspector} />
         </div>
@@ -340,7 +333,7 @@ export default function App() {
   const [outlineSearch, setOutlineSearch] = useState('')
   const [mode, setMode] = useState<EditorMode>('edit')
   const [inspectorOpen, setInspectorOpen] = useState(false)
-  const [saveState, setSaveState] = useState<SaveState>('idle')
+  const [saveState, setSaveState] = useState<SaveState>(() => resolveSaveState(readPersistedDocuments()[0]))
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -376,7 +369,7 @@ export default function App() {
     setDocuments(nextDocuments)
     setSelectedId(safeOpened[0].id)
     setError(null)
-    setSaveState(safeOpened[0].dirty ? 'dirty' : 'idle')
+    setSaveState(resolveSaveState(safeOpened[0]))
     setActiveOutlineId(null)
     setActiveFilter('all')
     setActiveTag(null)
@@ -405,13 +398,18 @@ export default function App() {
   }, [documents, activeTag])
 
   const synchronizeSelection = useCallback((nextSelectedId: string | null) => {
-    if (nextSelectedId === selectedIdRef.current) return
-
     const nextDocument = documentsRef.current.find((document) => document.id === nextSelectedId)
+    const selectionChanged = nextSelectedId !== selectedIdRef.current
+    // Same selection still needs dirty→saveState (cold start: selectedId already matches).
+    if (!selectionChanged) {
+      setSaveState((current) => reconcileSaveState(current, nextDocument, false))
+      return
+    }
+
     selectedIdRef.current = nextSelectedId
     setSelectedId(nextSelectedId)
     setError(null)
-    setSaveState(nextDocument?.dirty ? 'dirty' : 'idle')
+    setSaveState(reconcileSaveState('idle', nextDocument, true))
     setActiveOutlineId(null)
   }, [])
 
@@ -458,7 +456,7 @@ export default function App() {
       setActiveFilter('all')
       setActiveTag(null)
       setSearch('')
-      setSaveState(created.dirty ? 'dirty' : 'idle')
+      setSaveState(resolveSaveState(created))
       window.setTimeout(() => textareaRef.current?.focus(), 0)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Could not create the document.')
@@ -523,7 +521,7 @@ export default function App() {
         const result = requestedSaveAs ? await api?.saveFileAs?.(saveInput) : await api?.saveDocument?.(saveInput)
         if (api && result === null) {
           if (selectedIdRef.current === documentToSave.id) {
-            setSaveState(documentToSave.dirty ? 'dirty' : 'idle')
+            setSaveState(resolveSaveState(documentToSave))
           }
           return { continueWithPending: false }
         }
