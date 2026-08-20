@@ -35,6 +35,13 @@ function removeFrontmatter(markdown: string): string {
   return markdown.replace(/^---\s*\r?\n[\s\S]*?\r?\n---\s*(?:\r?\n|$)/, "");
 }
 
+/** Source lines consumed by a leading YAML frontmatter block (0 when absent). */
+export function frontmatterLineOffset(markdown: string): number {
+  const match = markdown.match(/^---\s*\r?\n[\s\S]*?\r?\n---\s*(?:\r?\n|$)/);
+  if (!match) return 0;
+  return (match[0].match(/\r?\n/g) ?? []).length;
+}
+
 function withoutFencedCode(markdown: string): string {
   return markdown.replace(/```[\s\S]*?```/g, " ");
 }
@@ -130,6 +137,7 @@ export function deriveTags(markdown: string): string[] {
 }
 
 export function deriveHeadings(markdown: string): MarkdownHeading[] {
+  const lineOffset = frontmatterLineOffset(markdown);
   const lines = removeFrontmatter(markdown).split(/\r?\n/);
   const headings: MarkdownHeading[] = [];
   const slugCounts = new Map<string, number>();
@@ -153,7 +161,7 @@ export function deriveHeadings(markdown: string): MarkdownHeading[] {
       id: count ? `${baseSlug}-${count + 1}` : baseSlug,
       text,
       level: match[1].length as HeadingLevel,
-      line: index + 1,
+      line: index + 1 + lineOffset,
     });
   });
 
