@@ -80,6 +80,8 @@ const api: LineApi = Object.freeze({
     subscribe<MenuCommand>(IPC_CHANNELS.menuCommand, callback),
   onExternalFilesOpened: (callback: (documents: LineDocument[]) => void) =>
     subscribe<LineDocument[]>(IPC_CHANNELS.externalFilesOpened, callback),
+  onExternalOpenFailed: (callback: (message: string) => void) =>
+    subscribe<string>(IPC_CHANNELS.externalOpenFailed, callback),
   onPrepareClose: (callback: (action: PrepareCloseAction) => void) =>
     subscribe<PrepareCloseAction>(IPC_CHANNELS.prepareClose, callback),
   finishPrepareClose: (success: boolean) =>

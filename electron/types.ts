@@ -7,6 +7,7 @@ export const IPC_CHANNELS = {
   rendererReady: 'line:app:renderer-ready',
   menuCommand: 'line:menu:command',
   externalFilesOpened: 'line:documents:external-files-opened',
+  externalOpenFailed: 'line:documents:external-open-failed',
   prepareClose: 'line:app:prepare-close',
   prepareCloseFinished: 'line:app:prepare-close-finished',
 } as const
@@ -72,6 +73,7 @@ export interface LineApi {
   onExternalFilesOpened(
     callback: (documents: LineDocument[]) => void,
   ): () => void
+  onExternalOpenFailed(callback: (message: string) => void): () => void
   onPrepareClose(callback: (action: PrepareCloseAction) => void): () => void
   finishPrepareClose(success: boolean): void
 }

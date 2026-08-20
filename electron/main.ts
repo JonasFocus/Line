@@ -24,6 +24,13 @@ import {
   type SaveFileInput,
 } from './types'
 import { ExternalFileQueue } from './externalFileQueue'
+import {
+  collectExternalFilePathsFromArgv,
+  formatExternalOpenError,
+  partitionExternalOpenResults,
+  SUPPORTED_EXTENSIONS,
+  type ExternalOpenFailure,
+} from './externalFileIntake'
 import { KeyedTaskQueue } from './keyedTaskQueue'
 import {
   atomicWriteFile,
@@ -42,7 +49,6 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
-const SUPPORTED_EXTENSIONS = new Set(['.md', '.markdown', '.txt'])
 const grantedPaths = new Set<string>()
 const externalFileQueue = new ExternalFileQueue()
 const documentSaveQueue = new KeyedTaskQueue()
@@ -355,7 +361,7 @@ function registerIpcHandlers(): void {
     if (!mainWindow || event.sender !== mainWindow.webContents) return []
     const targetWindow = mainWindow
     const pendingPaths = externalFileQueue.markRendererReady()
-    const documents = await readExternalDocuments(pendingPaths)
+    const { documents, failures } = await readExternalDocuments(pendingPaths)
 
     if (
       targetWindow !== mainWindow ||
@@ -366,6 +372,20 @@ function registerIpcHandlers(): void {
       return []
     }
 
+    // Defer so the renderer's readyForExternalFiles().then(...) can accept
+    // documents before the failure lands on the existing error banner.
+    if (failures.length > 0) {
+      setImmediate(() => {
+        if (
+          targetWindow !== mainWindow ||
+          targetWindow.isDestroyed() ||
+          targetWindow.webContents.isDestroyed()
+        ) {
+          return
+        }
+        notifyExternalOpenFailures(failures, targetWindow)
+      })
+    }
     return documents
   })
   ipcMain.on(IPC_CHANNELS.prepareCloseFinished, (event, success: unknown) => {
@@ -388,20 +408,49 @@ function registerIpcHandlers(): void {
 
 async function readExternalDocuments(
   filePaths: string[],
-): Promise<LineDocument[]> {
-  const documents = await Promise.all(
+): Promise<{ documents: LineDocument[]; failures: ExternalOpenFailure[] }> {
+  const results = await Promise.all(
     filePaths.map(async (filePath) => {
       try {
-        return await readDocument(filePath)
-      } catch {
-        return null
+        return {
+          filePath,
+          document: await readDocument(filePath),
+        }
+      } catch (error) {
+        return { filePath, error }
       }
     }),
   )
-  const readableDocuments = documents.filter(
-    (document): document is LineDocument => document !== null,
+
+  return partitionExternalOpenResults(results)
+}
+
+function notifyExternalOpenFailures(
+  failures: ExternalOpenFailure[],
+  targetWindow: BrowserWindow | null = mainWindow,
+): void {
+  if (failures.length === 0) return
+  if (
+    !targetWindow ||
+    targetWindow.isDestroyed() ||
+    targetWindow.webContents.isDestroyed()
+  ) {
+    return
+  }
+
+  targetWindow.webContents.send(
+    IPC_CHANNELS.externalOpenFailed,
+    formatExternalOpenError(failures),
   )
-  return readableDocuments
+}
+
+function focusMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (mainWindow.isMinimized()) {
+    mainWindow.restore()
+  }
+  mainWindow.show()
+  mainWindow.focus()
 }
 
 async function sendExternalDocuments(filePaths: string[]): Promise<void> {
@@ -417,7 +466,7 @@ async function sendExternalDocuments(filePaths: string[]): Promise<void> {
   const readyPaths = externalFileQueue.accept(filePaths)
   if (!targetWindow || targetWindow.isDestroyed() || readyPaths.length === 0) return
 
-  const readableDocuments = await readExternalDocuments(readyPaths)
+  const { documents, failures } = await readExternalDocuments(readyPaths)
 
   if (
     targetWindow !== mainWindow ||
@@ -428,12 +477,14 @@ async function sendExternalDocuments(filePaths: string[]): Promise<void> {
     return
   }
 
-  if (readableDocuments.length > 0) {
+  if (documents.length > 0) {
     targetWindow.webContents.send(
       IPC_CHANNELS.externalFilesOpened,
-      readableDocuments,
+      documents,
     )
   }
+
+  notifyExternalOpenFailures(failures, targetWindow)
 }
 
 function createWindow(): BrowserWindow {
@@ -528,37 +579,59 @@ function createWindow(): BrowserWindow {
   return window
 }
 
-app.setName('Line')
-if (process.platform === 'darwin' && !app.isPackaged) {
-  process.title = 'Line'
+function intakeArgvFiles(argv: readonly string[]): void {
+  const filePaths = collectExternalFilePathsFromArgv(argv, {
+    ignorePaths: new Set([normalizePath(process.execPath)]),
+  })
+  if (filePaths.length === 0) return
+  void sendExternalDocuments(filePaths)
 }
 
-app.on('before-quit', () => {
-  quitRequested = true
-})
+const gotSingleInstanceLock = app.requestSingleInstanceLock()
+if (!gotSingleInstanceLock) {
+  app.quit()
+} else {
+  app.on('second-instance', (_event, argv) => {
+    focusMainWindow()
+    intakeArgvFiles(argv)
+  })
 
-app.on('open-file', (event, filePath) => {
-  event.preventDefault()
-  void sendExternalDocuments([filePath])
-})
+  app.setName('Line')
+  if (process.platform === 'darwin' && !app.isPackaged) {
+    process.title = 'Line'
+  }
 
-app.whenReady().then(() => {
-  session.defaultSession.setPermissionRequestHandler(
-    (_webContents, _permission, callback) => callback(false),
-  )
-  registerIpcHandlers()
-  installApplicationMenu()
-  mainWindow = createWindow()
+  app.on('before-quit', () => {
+    quitRequested = true
+  })
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      mainWindow = createWindow()
+  // macOS Finder / Dock deliver paths here, including cold-start drops before ready.
+  app.on('open-file', (event, filePath) => {
+    event.preventDefault()
+    void sendExternalDocuments([filePath])
+  })
+
+  app.whenReady().then(() => {
+    session.defaultSession.setPermissionRequestHandler(
+      (_webContents, _permission, callback) => callback(false),
+    )
+    registerIpcHandlers()
+    installApplicationMenu()
+    mainWindow = createWindow()
+
+    // CLI / non-Finder launches may only provide paths on argv.
+    intakeArgvFiles(process.argv)
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        mainWindow = createWindow()
+      }
+    })
+  })
+
+  app.on('window-all-closed', () => {
+    if (process.platform !== 'darwin') {
+      app.quit()
     }
   })
-})
-
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
-})
+}
