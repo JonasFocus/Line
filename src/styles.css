@@ -416,7 +416,7 @@ textarea:focus-visible {
 
 .document-card-top {
   display: flex;
-  padding-right: 22px;
+  padding-right: 54px;
   align-items: center;
   gap: 7px;
 }
@@ -442,10 +442,10 @@ textarea:focus-visible {
   border-radius: 50%;
 }
 
-.favorite-control {
+.favorite-control,
+.remove-control {
   position: absolute;
   top: 11px;
-  right: 9px;
   display: grid;
   width: 28px;
   height: 28px;
@@ -458,9 +458,14 @@ textarea:focus-visible {
   transition: opacity 120ms ease, color 120ms ease;
 }
 
-.favorite-control:hover { background: rgba(255, 255, 255, 0.055); }
+.favorite-control { right: 9px; }
+.remove-control { right: 37px; }
+
+.favorite-control:hover,
+.remove-control:hover { background: rgba(255, 255, 255, 0.055); }
 .favorite-control.is-favorite,
-.document-card:hover .favorite-control { opacity: 1; }
+.document-card:hover .favorite-control,
+.document-card:hover .remove-control { opacity: 1; }
 .favorite-control.is-favorite { color: #d1d1d4; }
 
 .document-excerpt {
