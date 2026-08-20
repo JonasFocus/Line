@@ -5,8 +5,8 @@ import { parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
 import type { LineDocument } from './lineDocument'
 import { loadPersistedDocuments, removeLegacyDemoDocuments, savePersistedDocuments } from './persistedLibrary'
-import { resolveSelectionAfterDocumentsChange, resolveVisibleSelection } from './selection'
-import { saveDocumentsBeforeClose } from './saveBeforeClose'
+import { resolveSelectionAfterDocumentsChange } from './selection'
+import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
 
 type EditorMode = 'edit' | 'split' | 'preview'
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'error'
@@ -209,13 +209,13 @@ function DocumentList({ documents, selectedId, search, onSearch, onSelect, onFav
   )
 }
 
-function ModeControl({ mode, onMode }: { mode: EditorMode; onMode: (mode: EditorMode) => void }) {
+function ModeControl({ mode, onMode, disabled = false }: { mode: EditorMode; onMode: (mode: EditorMode) => void; disabled?: boolean }) {
   const modes: { mode: EditorMode; icon: IconName; label: string }[] = [
     { mode: 'edit', icon: 'edit', label: 'Editor' },
     { mode: 'split', icon: 'split', label: 'Split view' },
     { mode: 'preview', icon: 'eye', label: 'Preview' },
   ]
-  return <div className="segmented mode-control">{modes.map((item) => <PlainButton active={mode === item.mode} icon={item.icon} key={item.mode} label={item.label} onClick={() => onMode(item.mode)} />)}</div>
+  return <div className="segmented mode-control">{modes.map((item) => <PlainButton active={mode === item.mode} disabled={disabled} icon={item.icon} key={item.mode} label={item.label} onClick={() => onMode(item.mode)} />)}</div>
 }
 
 function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, onMode, onSave, onNew, onOpen, inspectorOpen, onInspector }: {
@@ -239,11 +239,18 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
           <Icon name="document" size={15} />
           <span>{document?.title || 'No document selected'}</span>
         </div>
-        <div className="workspace-center no-drag"><ModeControl mode={mode} onMode={onMode} /></div>
+        <div className="workspace-center no-drag"><ModeControl disabled={!document} mode={mode} onMode={onMode} /></div>
         <div className="workspace-actions no-drag">
           <button className={`save-status ${saveState}`} onClick={onSave} type="button">
             <Icon name="save" size={16} />
-            <span>{saveState === 'saving' ? 'Saving' : saveState === 'dirty' ? 'Save' : saveState === 'error' ? 'Retry' : 'Saved'}</span>
+            <span>{
+              document && !document.path && saveState !== 'saving' && saveState !== 'error'
+                ? 'Not linked — Save As'
+                : saveState === 'saving' ? 'Saving'
+                  : saveState === 'dirty' ? 'Save'
+                    : saveState === 'error' ? 'Retry'
+                      : 'Saved'
+            }</span>
           </button>
           <PlainButton active={inspectorOpen} icon="inspector" label="Toggle inspector" onClick={onInspector} />
           <PlainButton disabled icon="share" label="Sharing is not available in this MVP" />
@@ -440,7 +447,9 @@ export default function App() {
       const nextDocuments = [created, ...documentsRef.current]
       documentsRef.current = nextDocuments
       setDocuments(nextDocuments)
+      selectedIdRef.current = created.id
       setSelectedId(created.id)
+      setMode('edit')
       setError(null)
       setActiveFilter('all')
       setActiveTag(null)
@@ -570,7 +579,12 @@ export default function App() {
 
   const saveDocument = useCallback(async (saveAs = false, saveCopy = false, defaultToDocuments = false) => {
     if (!selectedDocument) return false
-    return saveDocumentRequest({ defaultToDocuments, document: selectedDocument, saveAs, saveCopy })
+    return saveDocumentRequest({
+      defaultToDocuments,
+      document: selectedDocument,
+      saveAs: resolveSaveAs(selectedDocument.path, saveAs),
+      saveCopy,
+    })
   }, [saveDocumentRequest, selectedDocument])
 
   const openFolder = importDocument
@@ -638,7 +652,7 @@ export default function App() {
         return saveDocumentRequest({
           defaultToDocuments: false,
           document: documentToSave,
-          saveAs: false,
+          saveAs: resolveSaveAs(documentToSave.path),
           saveCopy: false,
         })
       }, () => {
@@ -692,6 +706,7 @@ export default function App() {
         input?.focus()
       }
       if (event.key.toLowerCase() === 'i' && event.shiftKey) { event.preventDefault(); setInspectorOpen((current) => !current) }
+      if (!selectedIdRef.current) return
       if (event.key === '1') setMode('edit')
       if (event.key === '2') setMode('split')
       if (event.key === '3') setMode('preview')
@@ -704,16 +719,8 @@ export default function App() {
     if (toastTimer.current) window.clearTimeout(toastTimer.current)
   }, [])
 
-  useEffect(() => {
-    const nextSelectedId = resolveVisibleSelection(
-      selectedIdRef.current,
-      filteredDocuments.map((document) => document.id),
-    )
-    synchronizeSelection(nextSelectedId)
-    // Document edits can change search and tag membership while the user types.
-    // Reconcile here only when navigation controls change.
-  }, [activeFilter, activeTag, search, synchronizeSelection])
-
+  // Search/tag/filter only narrow the library list. Keep the open document unless
+  // the user picks another one, or documents themselves change (add/remove).
   useEffect(() => {
     const nextSelectedId = resolveSelectionAfterDocumentsChange(
       selectedIdRef.current,
