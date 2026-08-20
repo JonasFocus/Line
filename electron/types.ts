@@ -28,6 +28,12 @@ export interface OpenFilesOptions {
   multiple?: boolean
 }
 
+/** File → Open result: successes plus an optional banner message for bad files. */
+export interface OpenFilesResult {
+  documents: LineDocument[]
+  error?: string
+}
+
 export interface SaveFileInput {
   path: string
   content: string
@@ -56,7 +62,7 @@ export interface PlatformInfo {
 export interface LineApi {
   createBlankDocument(): Promise<LineDocument>
   createDocument(): Promise<LineDocument>
-  openFiles(options?: OpenFilesOptions): Promise<LineDocument[]>
+  openFiles(options?: OpenFilesOptions): Promise<OpenFilesResult>
   importMarkdown(): Promise<LineDocument | null>
   saveFile(input: SaveFileInput): Promise<LineDocument>
   saveFileAs(input: SaveFileAsInput): Promise<LineDocument | null>

@@ -83,3 +83,39 @@ export function partitionExternalOpenResults<T>(
 
   return { documents, failures }
 }
+
+/**
+ * Read many paths in parallel. One failure must not abort the others.
+ * Used by File → Open and Finder / Dock intake.
+ */
+export async function settleDocumentReads<T>(
+  filePaths: readonly string[],
+  readOne: (filePath: string) => Promise<T>,
+): Promise<{ documents: T[]; failures: ExternalOpenFailure[] }> {
+  const results = await Promise.all(
+    filePaths.map(async (filePath) => {
+      try {
+        return { filePath, document: await readOne(filePath) }
+      } catch (error) {
+        return { filePath, error }
+      }
+    }),
+  )
+
+  return partitionExternalOpenResults(results)
+}
+
+/** Dialog / IPC open payload: keep good documents, attach a banner message for failures. */
+export function toOpenFilesResult<T>(
+  documents: T[],
+  failures: readonly ExternalOpenFailure[],
+): { documents: T[]; error?: string } {
+  if (failures.length === 0) {
+    return { documents }
+  }
+
+  return {
+    documents,
+    error: formatExternalOpenError(failures),
+  }
+}

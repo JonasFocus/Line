@@ -5,6 +5,7 @@ import {
   type LineDocument,
   type MenuCommand,
   type OpenFilesOptions,
+  type OpenFilesResult,
   type PlatformInfo,
   type PrepareCloseAction,
   type SaveFileAsInput,
@@ -30,7 +31,7 @@ const openFiles = (options?: OpenFilesOptions) =>
   ipcRenderer.invoke(
     IPC_CHANNELS.openFiles,
     options,
-  ) as Promise<LineDocument[]>
+  ) as Promise<OpenFilesResult>
 
 const saveFile = (input: SaveFileInput) =>
   ipcRenderer.invoke(IPC_CHANNELS.saveFile, input) as Promise<LineDocument>
@@ -46,8 +47,11 @@ const api: LineApi = Object.freeze({
   createDocument: createBlankDocument,
   openFiles,
   importMarkdown: async () => {
-    const [document] = await openFiles({ multiple: false })
-    return document ?? null
+    const { documents, error } = await openFiles({ multiple: false })
+    if (error && documents.length === 0) {
+      throw new Error(error)
+    }
+    return documents[0] ?? null
   },
   saveFile,
   saveFileAs,

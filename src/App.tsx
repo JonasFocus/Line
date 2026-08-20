@@ -523,16 +523,37 @@ export default function App() {
     }
     setLoading(true)
     try {
-      const result = api.openFiles ? await api.openFiles({ multiple: true }) : [await api.importMarkdown?.()]
-      const imported = result.map(normalizeImported).filter((document): document is LineDocument => document !== null)
+      let imported: LineDocument[] = []
+      let openError: string | undefined
+
+      if (api.openFiles) {
+        const result = await api.openFiles({ multiple: true })
+        imported = result.documents
+          .map(normalizeImported)
+          .filter((document): document is LineDocument => document !== null)
+        openError = result.error
+      } else {
+        const single = await api.importMarkdown?.()
+        imported = [single]
+          .map(normalizeImported)
+          .filter((document): document is LineDocument => document !== null)
+      }
+
+      if (openError) {
+        setError(openError)
+      } else if (imported.length) {
+        setError(null)
+      }
+
+      // Cancel (empty, no error) stays quiet, not an error.
       if (!imported.length) return
+
       const { documents: safeImported, protectedCount } = reconcileOpenedDocuments(documentsRef.current, imported)
       const importedIds = new Set(safeImported.map((document) => document.id))
       const nextDocuments = [...safeImported, ...documentsRef.current.filter((document) => !importedIds.has(document.id))]
       documentsRef.current = nextDocuments
       setDocuments(nextDocuments)
       setSelectedId(safeImported[0].id)
-      setError(null)
       setActiveFilter('all')
       setActiveTag(null)
       setSearch('')

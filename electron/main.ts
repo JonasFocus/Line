@@ -19,6 +19,7 @@ import {
   type LineDocument,
   type MenuCommand,
   type OpenFilesOptions,
+  type OpenFilesResult,
   type PlatformInfo,
   type SaveFileAsInput,
   type SaveFileInput,
@@ -27,8 +28,9 @@ import { ExternalFileQueue } from './externalFileQueue'
 import {
   collectExternalFilePathsFromArgv,
   formatExternalOpenError,
-  partitionExternalOpenResults,
+  settleDocumentReads,
   SUPPORTED_EXTENSIONS,
+  toOpenFilesResult,
   type ExternalOpenFailure,
 } from './externalFileIntake'
 import { KeyedTaskQueue } from './keyedTaskQueue'
@@ -41,6 +43,7 @@ import {
   createDocumentRevision,
   writeFileIfUnchanged,
 } from './documentRevision'
+import { createSavedLineDocument } from './savedDocument'
 import { resolveSaveDialogDefaultPath } from './savePath'
 import {
   resolveUnsavedCloseAction,
@@ -130,7 +133,7 @@ async function showSaveDialog(
 
 async function openDocuments(
   options: OpenFilesOptions = {},
-): Promise<LineDocument[]> {
+): Promise<OpenFilesResult> {
   const properties: OpenDialogOptions['properties'] = ['openFile']
   if (options.multiple !== false) {
     properties.push('multiSelections')
@@ -146,10 +149,14 @@ async function openDocuments(
   })
 
   if (result.canceled) {
-    return []
+    return { documents: [] }
   }
 
-  return Promise.all(result.filePaths.map(readDocument))
+  const { documents, failures } = await settleDocumentReads(
+    result.filePaths,
+    readDocument,
+  )
+  return toOpenFilesResult(documents, failures)
 }
 
 async function saveDocument(input: SaveFileInput): Promise<LineDocument> {
@@ -191,8 +198,22 @@ async function writeDocument(
         expectedRevision,
       )
     }
-    const savedDocument = await readDocument(normalizedPath)
-    return { ...savedDocument, revision: writtenRevision }
+
+    grantedPaths.add(normalizedPath)
+
+    let modifiedAt: string | null
+    try {
+      modifiedAt = (await stat(normalizedPath)).mtime.toISOString()
+    } catch {
+      modifiedAt = new Date().toISOString()
+    }
+
+    return createSavedLineDocument({
+      filePath: normalizedPath,
+      content,
+      revision: writtenRevision,
+      modifiedAt,
+    })
   })
 }
 
@@ -409,20 +430,7 @@ function registerIpcHandlers(): void {
 async function readExternalDocuments(
   filePaths: string[],
 ): Promise<{ documents: LineDocument[]; failures: ExternalOpenFailure[] }> {
-  const results = await Promise.all(
-    filePaths.map(async (filePath) => {
-      try {
-        return {
-          filePath,
-          document: await readDocument(filePath),
-        }
-      } catch (error) {
-        return { filePath, error }
-      }
-    }),
-  )
-
-  return partitionExternalOpenResults(results)
+  return settleDocumentReads(filePaths, readDocument)
 }
 
 function notifyExternalOpenFailures(
