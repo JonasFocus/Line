@@ -1,4 +1,4 @@
-# Line 1.0 manual QA
+# Line 1.0.1 manual QA
 
 Desktop app only. Pass/fail each item. Quote on-screen copy if it differs.
 
@@ -55,6 +55,28 @@ Desktop app only. Pass/fail each item. Quote on-screen copy if it differs.
 
 - [ ] After relaunch, the note is labeled **Not linked — Save As**
 - [ ] Save prompts Save As and never overwrites a remembered path
+
+## Unlinked filter
+
+- [ ] Sidebar shows an **Unlinked** row when at least one library note has no path
+- [ ] **Unlinked** row clears when the unlinked count hits 0
+- [ ] Filtering **Unlinked** shows only notes with no path
+
+## Library heading
+
+- [ ] Heading reads **Unlinked**, or **#tag**, or **Library** depending on the active filter
+- [ ] **All Documents** selected state drops when **Unlinked** or a tag is on
+
+## Find shortcut (Cmd+F)
+
+- [ ] With the markdown textarea focused/targeted, Cmd+F does not hijack — native find stays
+- [ ] With focus elsewhere, Cmd+F focuses library search
+- [ ] No custom Find panel
+
+## Library list entrance
+
+- [ ] No per-card stagger
+- [ ] Cards fade in together with a short list-in (~140ms ease-out), not 34ms × index
 
 ## Ghost tag / empty filter
 
