@@ -10,3 +10,8 @@ export interface LineDocument {
   revision: string | null
   dirty?: boolean
 }
+
+/** Session-only notes with no disk path (null or empty). */
+export function documentIsUnlinked(document: Pick<LineDocument, 'path'>): boolean {
+  return !document.path
+}

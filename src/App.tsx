@@ -3,9 +3,9 @@ import { Icon, type IconName } from './components/Icon'
 import { extractOutline, MarkdownPreview, type OutlineItem } from './components/MarkdownPreview'
 import { parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
-import type { LineDocument } from './lineDocument'
+import { documentIsUnlinked, type LineDocument } from './lineDocument'
 import { loadPersistedDocuments, removeDocumentFromLibrary, removeLegacyDemoDocuments, restoreDocumentToLibrary, savePersistedDocuments } from './persistedLibrary'
-import { resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
+import { resolveActiveFilter, resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
 import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
 
@@ -108,6 +108,7 @@ function Sidebar({ documents, activeFilter, activeTag, onFilter, onTag, onOpenFo
 }) {
   const favorites = documents.filter((doc) => doc.favorite).slice(0, 4)
   const tags = Array.from(new Set(documents.flatMap((doc) => doc.tags)))
+  const unlinkedCount = documents.filter(documentIsUnlinked).length
 
   return (
     <aside className="sidebar pane">
@@ -136,6 +137,11 @@ function Sidebar({ documents, activeFilter, activeTag, onFilter, onTag, onOpenFo
           <button className={`nav-row ${activeFilter === 'all' ? 'selected' : ''}`} onClick={() => onFilter('all')} type="button">
             <span className="chevron-spacer" /><Icon name="grid" size={16} /><span>All Documents</span><small>{documents.length}</small>
           </button>
+          {unlinkedCount > 0 && (
+            <button className={`nav-row ${activeFilter === 'unlinked' ? 'selected' : ''}`} onClick={() => onFilter('unlinked')} type="button">
+              <span className="chevron-spacer" /><Icon name="link" size={16} /><span>Unlinked</span><small>{unlinkedCount}</small>
+            </button>
+          )}
         </section>
 
         {tags.length > 0 && (
@@ -152,10 +158,11 @@ function Sidebar({ documents, activeFilter, activeTag, onFilter, onTag, onOpenFo
   )
 }
 
-function DocumentList({ documents, selectedId, search, activeTag, onSearch, onSelect, onFavorite, onRemove, onNew, onImport }: {
+function DocumentList({ documents, selectedId, search, activeFilter, activeTag, onSearch, onSelect, onFavorite, onRemove, onNew, onImport }: {
   documents: LineDocument[]
   selectedId: string | null
   search: string
+  activeFilter: string
   activeTag: string | null
   onSearch: (value: string) => void
   onSelect: (id: string) => void
@@ -164,7 +171,7 @@ function DocumentList({ documents, selectedId, search, activeTag, onSearch, onSe
   onNew: () => void
   onImport: () => void
 }) {
-  const isFiltered = Boolean(search || activeTag)
+  const isFiltered = Boolean(search || activeTag || activeFilter === 'unlinked')
 
   return (
     <section className="document-pane pane">
@@ -404,6 +411,7 @@ export default function App() {
   const filteredDocuments = useMemo(() => {
     const query = search.trim().toLowerCase()
     return documents.filter((document) => {
+      if (activeFilter === 'unlinked' && !documentIsUnlinked(document)) return false
       if (activeFilter.startsWith('doc:') && document.id !== activeFilter.slice(4)) return false
       if (activeTag && !document.tags.includes(activeTag)) return false
       if (!query) return true
@@ -418,6 +426,13 @@ export default function App() {
     const nextTag = resolveActiveTag(activeTag, availableTags)
     if (nextTag !== activeTag) setActiveTag(nextTag)
   }, [documents, activeTag])
+
+  // Unlinked row hides at zero. Clear the filter so the empty state does not stick.
+  useEffect(() => {
+    const hasUnlinked = documents.some(documentIsUnlinked)
+    const nextFilter = resolveActiveFilter(activeFilter, hasUnlinked)
+    if (nextFilter !== activeFilter) setActiveFilter(nextFilter)
+  }, [documents, activeFilter])
 
   const synchronizeSelection = useCallback((nextSelectedId: string | null) => {
     const nextDocument = documentsRef.current.find((document) => document.id === nextSelectedId)
@@ -801,6 +816,7 @@ export default function App() {
         onTag={setActiveTag}
       />
       <DocumentList
+        activeFilter={activeFilter}
         activeTag={activeTag}
         documents={filteredDocuments}
         onFavorite={(id) => {
