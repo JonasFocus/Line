@@ -111,6 +111,31 @@ const answer = 42 < 100;
     expect(html).not.toContain("<img");
     expect(html).not.toContain('href="javascript:');
   });
+
+  it("renders markdown images with http(s) and root-relative sources", () => {
+    const html = renderMarkdown(
+      '![Diagram](https://example.com/chart.png) ![Local](/assets/photo.jpg "Studio")',
+    );
+    expect(html).toContain('<img src="https://example.com/chart.png" alt="Diagram">');
+    expect(html).toContain('<img src="/assets/photo.jpg" alt="Local" title="Studio">');
+  });
+
+  it("skips images with unsafe schemes and still renders normal links", () => {
+    const html = renderMarkdown(
+      '![x](javascript:alert(1)) ![y](data:image/png;base64,abc) and [safe](https://example.com)',
+    );
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("javascript:");
+    expect(html).not.toContain("data:image");
+    expect(html).toContain('<a href="https://example.com">safe</a>');
+  });
+
+  it("does not turn image markdown into a bang-prefixed link", () => {
+    const html = renderMarkdown("See ![Cat](http://example.com/cat.png) nearby.");
+    expect(html).toContain('<img src="http://example.com/cat.png" alt="Cat">');
+    expect(html).not.toContain("!<a");
+    expect(html).not.toContain('>Cat</a>');
+  });
 });
 
 describe("Document model", () => {
