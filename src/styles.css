@@ -699,6 +699,11 @@ textarea:focus-visible {
   line-height: 1.82;
 }
 
+.markdown-preview:empty::before {
+  content: "Start writing in Markdown…";
+  color: #606065;
+}
+
 .markdown-preview h1,
 .markdown-preview h2,
 .markdown-preview h3,
