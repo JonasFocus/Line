@@ -190,11 +190,10 @@ function DocumentList({ documents, selectedId, search, activeFilter, activeTag, 
       </div>
 
       <div className="document-list">
-        {documents.length ? documents.map((doc, index) => (
+        {documents.length ? documents.map((doc) => (
           <div
             className={`document-card ${selectedId === doc.id ? 'selected' : ''}`}
             key={doc.id}
-            style={{ '--list-index': index } as React.CSSProperties}
           >
             <button className="document-card-main" onClick={() => onSelect(doc.id)} type="button">
               <span className="document-card-top">
