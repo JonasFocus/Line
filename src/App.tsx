@@ -635,9 +635,16 @@ export default function App() {
     }
     const source = selectedDocument?.content || ''
     const start = source.split('\n').slice(0, item.line).join('\n').length + (item.line ? 1 : 0)
-    textareaRef.current?.focus()
-    textareaRef.current?.setSelectionRange(start, start)
-    if (textareaRef.current) textareaRef.current.scrollTop = Math.max(0, item.line * 28 - 80)
+    const textarea = textareaRef.current
+    textarea?.focus()
+    textarea?.setSelectionRange(start, start)
+    if (textarea) {
+      const styles = window.getComputedStyle(textarea)
+      const fontSize = Number.parseFloat(styles.fontSize) || 15.5
+      const measured = Number.parseFloat(styles.lineHeight)
+      const lineHeight = Number.isFinite(measured) ? measured : fontSize * 1.72
+      textarea.scrollTop = Math.max(0, item.line * lineHeight - 80)
+    }
   }, [mode, selectedDocument?.content])
 
   const persistDocuments = useCallback((snapshot: readonly LineDocument[]) => {
