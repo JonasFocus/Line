@@ -847,7 +847,7 @@ textarea:focus-visible {
 
 .inspector-tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 1fr;
   height: 31px;
   margin-top: 6px;
   background: #39393b;
