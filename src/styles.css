@@ -723,6 +723,7 @@ textarea:focus-visible {
 .markdown-preview strong { color: #dadadd; font-weight: 700; }
 .markdown-preview em { color: #a0a0a5; }
 .markdown-preview a { color: #75ace7; text-decoration-color: rgba(117, 172, 231, 0.45); text-underline-offset: 3px; }
+.markdown-preview img { max-width: 100%; height: auto; }
 .markdown-preview blockquote {
   margin: 0 0 38px;
   padding: 0 0 0 16px;
