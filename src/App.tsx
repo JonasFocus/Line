@@ -107,7 +107,6 @@ function Sidebar({ documents, activeFilter, activeTag, onFilter, onTag, onOpenFo
         <TrafficLights />
         <div className="sidebar-header-actions no-drag">
           <PlainButton icon="folderAdd" label="Import files" onClick={onOpenFolder} />
-          <PlainButton disabled icon="panel" label="Sidebar toggle is not available in this MVP" />
         </div>
       </header>
 
@@ -162,7 +161,6 @@ function DocumentList({ documents, selectedId, search, onSearch, onSelect, onFav
         <div className="toolbar-group no-drag">
           <PlainButton icon="newDocument" label="New document" onClick={onNew} />
           <PlainButton icon="import" label="Import Markdown" onClick={onImport} />
-          <PlainButton disabled icon="sort" label="Sorting is not available in this MVP" />
         </div>
       </header>
 
@@ -253,8 +251,6 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
             }</span>
           </button>
           <PlainButton active={inspectorOpen} icon="inspector" label="Toggle inspector" onClick={onInspector} />
-          <PlainButton disabled icon="share" label="Sharing is not available in this MVP" />
-          <PlainButton disabled icon="dots" label="More options are not available in this MVP" />
         </div>
       </header>
 
@@ -312,9 +308,6 @@ function Inspector({ document, outline, activeId, search, onSearch, onNavigate, 
         <div className="inspector-document-title"><strong>{document?.title || 'No document'}</strong><PlainButton icon="close" label="Close inspector" onClick={onClose} /></div>
         <div className="inspector-tabs" role="tablist">
           <button aria-label="Document outline" aria-selected="true" className="active" role="tab" type="button"><Icon name="list" size={16} /></button>
-          <button aria-label="Links, coming soon" aria-selected="false" disabled role="tab" type="button"><Icon name="link" size={16} /></button>
-          <button aria-label="Tags, coming soon" aria-selected="false" disabled role="tab" type="button"><Icon name="tag" size={16} /></button>
-          <button aria-label="Inspector search, coming soon" aria-selected="false" disabled role="tab" type="button"><Icon name="search" size={16} /></button>
         </div>
         <div className="outline-heading"><span>Contents</span><small>{outline.length}</small></div>
         <nav className="outline-list">
