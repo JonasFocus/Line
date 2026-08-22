@@ -203,9 +203,10 @@ function safeHref(href: string): string {
   return "#";
 }
 
-/** http(s) and root-relative paths only; unknown schemes are rejected. */
+/** http(s) and root-relative paths only; protocol-relative and unknown schemes are rejected. */
 function safeSrc(src: string): string | null {
   const trimmed = src.trim();
+  if (trimmed.startsWith("//")) return null;
   if (/^(?:https?:|\/)/i.test(trimmed)) return escapeHtml(trimmed);
   return null;
 }

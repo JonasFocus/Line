@@ -130,6 +130,12 @@ const answer = 42 < 100;
     expect(html).toContain('<a href="https://example.com">safe</a>');
   });
 
+  it("rejects protocol-relative image sources", () => {
+    const html = renderMarkdown("![x](//host/x.png)");
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("//");
+  });
+
   it("does not turn image markdown into a bang-prefixed link", () => {
     const html = renderMarkdown("See ![Cat](http://example.com/cat.png) nearby.");
     expect(html).toContain('<img src="http://example.com/cat.png" alt="Cat">');
