@@ -102,7 +102,9 @@ function selectedBlockRange(
 }
 
 function lineStartIndex(value: string, index: number): number {
-  const from = value.lastIndexOf('\n', clampIndex(value, index) - 1)
+  const clamped = clampIndex(value, index)
+  if (clamped === 0) return 0
+  const from = value.lastIndexOf('\n', clamped - 1)
   return from === -1 ? 0 : from + 1
 }
 
