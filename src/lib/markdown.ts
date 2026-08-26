@@ -267,12 +267,57 @@ function renderInline(source: string): string {
   return html;
 }
 
-function listItem(line: string): { ordered: boolean; text: string } | null {
-  const unordered = line.match(/^\s{0,3}[-+*]\s+(.+)$/);
-  if (unordered) return { ordered: false, text: unordered[1] };
-  const ordered = line.match(/^\s{0,3}\d+[.)]\s+(.+)$/);
-  if (ordered) return { ordered: true, text: ordered[1] };
+type ParsedListItem = {
+  ordered: boolean;
+  text: string;
+  level: number;
+};
+
+/** Two spaces or one tab is one nesting level. */
+function listIndentLevel(indent: string): number {
+  let columns = 0;
+  for (const character of indent) {
+    columns += character === "\t" ? 2 : 1;
+  }
+  return Math.floor(columns / 2);
+}
+
+function listItem(line: string): ParsedListItem | null {
+  const unordered = line.match(/^([ \t]*)[-+*]\s+(.+)$/);
+  if (unordered) {
+    return { ordered: false, text: unordered[2], level: listIndentLevel(unordered[1]) };
+  }
+  const ordered = line.match(/^([ \t]*)\d+[.)]\s+(.+)$/);
+  if (ordered) {
+    return { ordered: true, text: ordered[2], level: listIndentLevel(ordered[1]) };
+  }
   return null;
+}
+
+function renderListRange(items: ParsedListItem[], start: number, end: number): string {
+  const parts: string[] = [];
+  let index = start;
+
+  while (index < end) {
+    const level = items[index].level;
+    const ordered = items[index].ordered;
+    const tag = ordered ? "ol" : "ul";
+    const lis: string[] = [];
+
+    while (index < end && items[index].level === level && items[index].ordered === ordered) {
+      const item = items[index];
+      index += 1;
+      const nestedStart = index;
+      while (index < end && items[index].level > item.level) {
+        index += 1;
+      }
+      lis.push(`<li>${renderInline(item.text)}${renderListRange(items, nestedStart, index)}</li>`);
+    }
+
+    parts.push(`<${tag}>${lis.join("")}</${tag}>`);
+  }
+
+  return parts.join("");
 }
 
 export function renderMarkdown(markdown: string): string {
@@ -332,16 +377,15 @@ export function renderMarkdown(markdown: string): string {
 
     const item = listItem(line);
     if (item) {
-      const ordered = item.ordered;
-      const items: string[] = [];
+      const items = [item];
+      index += 1;
       while (index < lines.length) {
         const nextItem = listItem(lines[index]);
-        if (!nextItem || nextItem.ordered !== ordered) break;
-        items.push(`<li>${renderInline(nextItem.text)}</li>`);
+        if (!nextItem) break;
+        items.push(nextItem);
         index += 1;
       }
-      const tag = ordered ? "ol" : "ul";
-      output.push(`<${tag}>${items.join("")}</${tag}>`);
+      output.push(renderListRange(items, 0, items.length));
       continue;
     }
 

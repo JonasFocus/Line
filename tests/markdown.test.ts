@@ -140,6 +140,36 @@ const answer = 42 < 100;
     expect(html).toContain('<pre><code class="language-ts">const answer = 42 &lt; 100;</code></pre>');
   });
 
+  it("nests unordered list items indented by two spaces", () => {
+    expect(renderMarkdown("- Parent\n  - Child")).toBe(
+      "<ul><li>Parent<ul><li>Child</li></ul></li></ul>",
+    );
+  });
+
+  it("nests an ordered list inside an unordered list", () => {
+    expect(renderMarkdown("- Parent\n  1. Child")).toBe(
+      "<ul><li>Parent<ol><li>Child</li></ol></li></ul>",
+    );
+  });
+
+  it("nests an unordered list inside an ordered list", () => {
+    expect(renderMarkdown("1. Parent\n  - Child")).toBe(
+      "<ol><li>Parent<ul><li>Child</li></ul></li></ol>",
+    );
+  });
+
+  it("treats each two spaces of indent as one nesting level", () => {
+    expect(renderMarkdown("- One\n  - Two\n    - Three\n      - Four\n        - Five")).toBe(
+      "<ul><li>One<ul><li>Two<ul><li>Three<ul><li>Four<ul><li>Five</li></ul></li></ul></li></ul></li></ul></li></ul>",
+    );
+  });
+
+  it("treats a tab indent as one nested list level", () => {
+    expect(renderMarkdown("- Parent\n\t- Child")).toBe(
+      "<ul><li>Parent<ul><li>Child</li></ul></li></ul>",
+    );
+  });
+
   it("escapes HTML and blocks unsafe links", () => {
     const html = renderMarkdown("<img src=x onerror=alert(1)> [click](javascript:alert(1))");
     expect(html).toContain("&lt;img src=x onerror=alert(1)&gt;");
