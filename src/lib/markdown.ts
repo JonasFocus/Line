@@ -240,6 +240,15 @@ function autolinkBareUrls(html: string, protect: (fragment: string) => string): 
   });
 }
 
+function applyInlineMarks(html: string): string {
+  return html
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/__([^_]+)__/g, "<strong>$1</strong>")
+    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "<em>$1</em>")
+    .replace(/(?<!_)_([^_]+)_(?!_)/g, "<em>$1</em>")
+    .replace(/~~([^~]+)~~/g, "<del>$1</del>");
+}
+
 function renderInline(source: string): string {
   const tokens: string[] = [];
   const protect = (fragment: string): string => {
@@ -269,17 +278,14 @@ function renderInline(source: string): string {
     /\[([^\]]+)]\(([^\s)]+)(?:\s+&quot;([^&]*)&quot;)?\)/g,
     (_match, label: string, href: string, title?: string) => {
       const titleAttribute = title ? ` title="${escapeHtml(title)}"` : "";
-      return protect(`<a href="${safeHref(href)}"${titleAttribute}>${label}</a>`);
+      return protect(`<a href="${safeHref(href)}"${titleAttribute}>${applyInlineMarks(label)}</a>`);
     },
   );
   html = autolinkBareUrls(html, protect);
-  html = html
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/__([^_]+)__/g, "<strong>$1</strong>")
-    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "<em>$1</em>")
-    .replace(/(?<!_)_([^_]+)_(?!_)/g, "<em>$1</em>")
-    .replace(/~~([^~]+)~~/g, "<del>$1</del>")
-    .replace(/\u0000CODE(\d+)\u0000/g, (_match, index: string) => tokens[Number(index)]);
+  html = applyInlineMarks(html).replace(
+    /\u0000CODE(\d+)\u0000/g,
+    (_match, index: string) => tokens[Number(index)],
+  );
 
   return html;
 }

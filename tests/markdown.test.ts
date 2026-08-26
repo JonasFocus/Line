@@ -334,6 +334,12 @@ a | b | c | d`);
     const html = renderMarkdown("[https://example.com](https://example.com)");
     expect(html).toBe('<p><a href="https://example.com">https://example.com</a></p>');
   });
+
+  it("renders emphasis inside markdown link labels", () => {
+    expect(renderMarkdown("[**docs**](https://example.com)")).toContain(
+      '<a href="https://example.com"><strong>docs</strong></a>',
+    );
+  });
 });
 
 describe("Document model", () => {
