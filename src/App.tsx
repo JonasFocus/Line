@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, type IconName } from './components/Icon'
 import { extractOutline, MarkdownPreview, type OutlineItem } from './components/MarkdownPreview'
-import { parseMarkdownMetadata } from './lib'
+import { footerFileLabel, formatReadTimeLabel, formatWordCountLabel } from './editorFooter'
+import { countWords, estimateReadTime, parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
 import { documentIsUnlinked, type LineDocument } from './lineDocument'
 import { LIBRARY_PERSIST_FAILED_MESSAGE, loadPersistedDocuments, removeDocumentFromLibrary, removeLegacyDemoDocuments, restoreDocumentToLibrary, savePersistedDocuments } from './persistedLibrary'
@@ -256,7 +257,8 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
   inspectorOpen: boolean
   onInspector: () => void
 }) {
-  const wordCount = document?.content.trim() ? document.content.trim().split(/\s+/).length : 0
+  const wordCount = document ? countWords(document.content) : 0
+  const fileLabel = footerFileLabel(document?.path)
   return (
     <main className="workspace pane">
       <header className="workspace-toolbar titlebar-region">
@@ -290,7 +292,12 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
             </div>
           )}
           {mode !== 'edit' && <div className="preview-column" data-preview-scroll><MarkdownPreview markdown={document.content} /></div>}
-          <footer className="editor-footer"><span>{wordCount.toLocaleString()} words</span><span>{document.dirty ? 'Edited' : 'Markdown'}</span></footer>
+          <footer className="editor-footer">
+            <span>{formatWordCountLabel(wordCount)}</span>
+            {wordCount > 0 ? <span>{formatReadTimeLabel(estimateReadTime(wordCount))}</span> : null}
+            {fileLabel ? <span title={document.path ?? undefined}>{fileLabel}</span> : null}
+            <span>{document.dirty ? 'Edited' : 'Markdown'}</span>
+          </footer>
         </div>
       ) : (
         <div className="workspace-empty">
