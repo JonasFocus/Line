@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, type IconName } from './components/Icon'
 import { extractOutline, MarkdownPreview, type OutlineItem } from './components/MarkdownPreview'
+import { buildDocumentStats } from './documentStats'
 import { footerFileLabel, formatReadTimeLabel, formatWordCountLabel } from './editorFooter'
 import { countWords, estimateReadTime, parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
@@ -333,6 +334,8 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
   )
 }
 
+type InspectorTab = 'outline' | 'stats'
+
 function Inspector({ document, outline, activeId, search, onSearch, onNavigate, onClose }: {
   document: LineDocument | null
   outline: OutlineItem[]
@@ -342,7 +345,23 @@ function Inspector({ document, outline, activeId, search, onSearch, onNavigate, 
   onNavigate: (item: OutlineItem) => void
   onClose: () => void
 }) {
+  const [tab, setTab] = useState<InspectorTab>('outline')
+  const outlineTabRef = useRef<HTMLButtonElement>(null)
+  const statsTabRef = useRef<HTMLButtonElement>(null)
   const visibleOutline = outline.filter((item) => item.text.toLowerCase().includes(search.toLowerCase()))
+  const stats = useMemo(() => buildDocumentStats({
+    content: document?.content ?? '',
+    path: document?.path ?? null,
+    tags: document?.tags ?? [],
+    dirty: document?.dirty,
+  }), [document])
+
+  const selectTab = (next: InspectorTab) => {
+    setTab(next)
+    const target = next === 'outline' ? outlineTabRef.current : statsTabRef.current
+    target?.focus()
+  }
+
   return (
     <aside className="inspector pane">
       <header className="inspector-toolbar titlebar-region">
@@ -350,23 +369,84 @@ function Inspector({ document, outline, activeId, search, onSearch, onNavigate, 
       </header>
       <div className="inspector-body">
         <div className="inspector-document-title"><strong>{document?.title || 'No document'}</strong><PlainButton icon="close" label="Close inspector" onClick={onClose} /></div>
-        <div className="inspector-tabs" role="tablist">
-          <button aria-label="Document outline" aria-selected="true" className="active" role="tab" type="button"><Icon name="list" size={16} /></button>
+        <div
+          aria-label="Inspector"
+          className="inspector-tabs"
+          onKeyDown={(event) => {
+            if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+              event.preventDefault()
+              selectTab(tab === 'outline' ? 'stats' : 'outline')
+            } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+              event.preventDefault()
+              selectTab(tab === 'outline' ? 'stats' : 'outline')
+            } else if (event.key === 'Home') {
+              event.preventDefault()
+              selectTab('outline')
+            } else if (event.key === 'End') {
+              event.preventDefault()
+              selectTab('stats')
+            }
+          }}
+          role="tablist"
+        >
+          <button
+            aria-controls="inspector-panel-outline"
+            aria-label="Outline"
+            aria-selected={tab === 'outline'}
+            className={tab === 'outline' ? 'active' : ''}
+            id="inspector-tab-outline"
+            onClick={() => setTab('outline')}
+            ref={outlineTabRef}
+            role="tab"
+            tabIndex={tab === 'outline' ? 0 : -1}
+            type="button"
+          >
+            <Icon name="list" size={16} />
+          </button>
+          <button
+            aria-controls="inspector-panel-stats"
+            aria-label="Stats"
+            aria-selected={tab === 'stats'}
+            className={tab === 'stats' ? 'active' : ''}
+            id="inspector-tab-stats"
+            onClick={() => setTab('stats')}
+            ref={statsTabRef}
+            role="tab"
+            tabIndex={tab === 'stats' ? 0 : -1}
+            type="button"
+          >
+            <Icon name="document" size={16} />
+          </button>
         </div>
-        <div className="outline-heading"><span>Contents</span><small>{outline.length}</small></div>
-        <nav className="outline-list">
-          {visibleOutline.length ? visibleOutline.map((item) => (
-            <button
-              className={`${activeId === item.id ? 'active' : ''} level-${item.level}`}
-              key={`${item.id}-${item.line}`}
-              onClick={() => onNavigate(item)}
-              title={item.text}
-              type="button"
-            >
-              {item.text}
-            </button>
-          )) : <div className="outline-empty">{outline.length ? 'No matching sections' : 'Add headings to build an outline'}</div>}
-        </nav>
+        {tab === 'outline' ? (
+          <div aria-labelledby="inspector-tab-outline" id="inspector-panel-outline" role="tabpanel">
+            <div className="outline-heading"><span>Contents</span><small>{outline.length}</small></div>
+            <nav className="outline-list">
+              {visibleOutline.length ? visibleOutline.map((item) => (
+                <button
+                  className={`${activeId === item.id ? 'active' : ''} level-${item.level}`}
+                  key={`${item.id}-${item.line}`}
+                  onClick={() => onNavigate(item)}
+                  title={item.text}
+                  type="button"
+                >
+                  {item.text}
+                </button>
+              )) : <div className="outline-empty">{outline.length ? 'No matching sections' : 'Add headings to build an outline'}</div>}
+            </nav>
+          </div>
+        ) : (
+          <div aria-labelledby="inspector-tab-stats" id="inspector-panel-stats" role="tabpanel" tabIndex={0}>
+            <dl className="inspector-stats">
+              <div><dt>Words</dt><dd>{stats.words.toLocaleString()}</dd></div>
+              <div><dt>Characters</dt><dd>{stats.characters.toLocaleString()}</dd></div>
+              <div><dt>Reading time</dt><dd>{stats.readTimeMinutes} min</dd></div>
+              <div><dt>Headings</dt><dd>{stats.headingCount.toLocaleString()}</dd></div>
+              <div><dt>Tags</dt><dd>{stats.tagCount.toLocaleString()}</dd></div>
+              <div><dt>File</dt><dd title={document?.path || stats.pathLabel}>{stats.pathLabel}</dd></div>
+            </dl>
+          </div>
+        )}
       </div>
     </aside>
   )
