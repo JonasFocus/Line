@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { wrapMarkdownSelection } from '../src/markdownWrap'
+import { markdownWrapKindFromModKey, wrapMarkdownSelection } from '../src/markdownWrap'
 
 describe('wrapMarkdownSelection', () => {
   describe('bold', () => {
@@ -110,6 +110,30 @@ describe('wrapMarkdownSelection', () => {
       })
     })
 
+    it('unwraps italic around bold on a second toggle', () => {
+      const wrapped = wrapMarkdownSelection({
+        value: '**hello**',
+        selectionStart: 2,
+        selectionEnd: 7,
+        kind: 'italic',
+      })
+      expect(wrapped).toEqual({
+        value: '***hello***',
+        selectionStart: 3,
+        selectionEnd: 8,
+      })
+      expect(wrapMarkdownSelection({
+        value: wrapped.value,
+        selectionStart: wrapped.selectionStart,
+        selectionEnd: wrapped.selectionEnd,
+        kind: 'italic',
+      })).toEqual({
+        value: '**hello**',
+        selectionStart: 2,
+        selectionEnd: 7,
+      })
+    })
+
     it('inserts * around an empty selection and places the caret inside', () => {
       expect(wrapMarkdownSelection({
         value: 'hello',
@@ -150,5 +174,20 @@ describe('wrapMarkdownSelection', () => {
         selectionEnd: 18,
       })
     })
+  })
+})
+
+describe('markdownWrapKindFromModKey', () => {
+  const cmd = { altKey: false, metaKey: true, shiftKey: false }
+
+  it('maps Cmd-B, Cmd-I, and Cmd-K', () => {
+    expect(markdownWrapKindFromModKey({ ...cmd, key: 'b' })).toBe('bold')
+    expect(markdownWrapKindFromModKey({ ...cmd, key: 'i' })).toBe('italic')
+    expect(markdownWrapKindFromModKey({ ...cmd, key: 'k' })).toBe('link')
+  })
+
+  it('ignores Ctrl so Ctrl-K can kill to end of line', () => {
+    expect(markdownWrapKindFromModKey({ altKey: false, key: 'k', metaKey: false, shiftKey: false })).toBeNull()
+    expect(markdownWrapKindFromModKey({ altKey: false, key: 'b', metaKey: false, shiftKey: false })).toBeNull()
   })
 })

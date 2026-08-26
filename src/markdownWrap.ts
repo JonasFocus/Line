@@ -16,6 +16,20 @@ export type MarkdownWrapResult = {
 const LINK_URL = 'https://'
 const EMPTY_LINK_LABEL = 'text'
 
+export function markdownWrapKindFromModKey(event: {
+  altKey: boolean
+  key: string
+  metaKey: boolean
+  shiftKey: boolean
+}): MarkdownWrapKind | null {
+  if (!event.metaKey || event.shiftKey || event.altKey) return null
+  const key = event.key.toLowerCase()
+  if (key === 'b') return 'bold'
+  if (key === 'i') return 'italic'
+  if (key === 'k') return 'link'
+  return null
+}
+
 export function wrapMarkdownSelection({
   value,
   selectionStart,
@@ -71,27 +85,28 @@ function toggleMarker(value: string, start: number, end: number, marker: string)
   return replaceRange(value, start, end, `${marker}${selected}${marker}`, innerStart, innerStart + selected.length)
 }
 
-function isItalicInside(selected: string): boolean {
-  if (selected.length < 2) return false
-  if (!selected.startsWith('*') || !selected.endsWith('*')) return false
-  // Leave **bold** alone; only unwrap a single-star wrap.
-  return !selected.startsWith('**') && !selected.endsWith('**')
+function countRun(value: string, from: number, step: 1 | -1): number {
+  let count = 0
+  for (let index = from; index >= 0 && index < value.length && value[index] === '*'; index += step) {
+    count += 1
+  }
+  return count
 }
 
-function isItalicAround(value: string, start: number, end: number): boolean {
-  if (!hasMarkerBefore(value, start, '*') || !hasMarkerAfter(value, end, '*')) return false
-  return !hasMarkerBefore(value, start, '**') && !hasMarkerAfter(value, end, '**')
+function hasOddItalicWrap(before: number, after: number): boolean {
+  return before % 2 === 1 && after % 2 === 1
 }
 
 function toggleItalic(value: string, start: number, end: number): MarkdownWrapResult {
   const selected = value.slice(start, end)
 
-  if (isItalicInside(selected)) {
+  if (hasOddItalicWrap(countRun(selected, 0, 1), countRun(selected, selected.length - 1, -1))) {
     const inner = selected.slice(1, selected.length - 1)
     return replaceRange(value, start, end, inner, start, start + inner.length)
   }
 
-  if (isItalicAround(value, start, end)) {
+  // Odd * counts on both sides mean italic is already on, including ***bold+italic***.
+  if (hasOddItalicWrap(countRun(value, start - 1, -1), countRun(value, end, 1))) {
     const unwrapStart = start - 1
     return replaceRange(value, unwrapStart, end + 1, selected, unwrapStart, unwrapStart + selected.length)
   }

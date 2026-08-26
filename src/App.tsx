@@ -24,7 +24,7 @@ import { applyEditorIndent } from './editorIndent'
 import { isMarkdownEditorTarget, shouldFocusLibrarySearchOnFind } from './findShortcut'
 import { appShellClassName } from './focusMode'
 import { resolveLibraryKeyboardTarget } from './libraryKeyboard'
-import { wrapMarkdownSelection, type MarkdownWrapKind } from './markdownWrap'
+import { markdownWrapKindFromModKey, wrapMarkdownSelection } from './markdownWrap'
 import { type EditorMode, resolveMenuLayoutAction } from './menuLayout'
 import { AUTOSAVE_DELAY_MS, shouldAutosave } from './autosave'
 import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
@@ -276,17 +276,8 @@ function DocumentList({ documents, selectedId, search, activeFilter, activeTag, 
   )
 }
 
-function markdownWrapKindFromModKey(event: { altKey: boolean; ctrlKey: boolean; key: string; metaKey: boolean; shiftKey: boolean }): MarkdownWrapKind | null {
-  if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return null
-  const key = event.key.toLowerCase()
-  if (key === 'b') return 'bold'
-  if (key === 'i') return 'italic'
-  if (key === 'k') return 'link'
-  return null
-}
-
 function handleMarkdownWrapKeyDown(
-  event: { altKey: boolean; ctrlKey: boolean; currentTarget: HTMLTextAreaElement; key: string; metaKey: boolean; preventDefault: () => void; shiftKey: boolean; target: EventTarget },
+  event: { altKey: boolean; currentTarget: HTMLTextAreaElement; key: string; metaKey: boolean; preventDefault: () => void; shiftKey: boolean; target: EventTarget },
   onDocumentChange: (change: Partial<LineDocument>) => void,
 ) {
   if (!isMarkdownEditorTarget(event.target)) return
