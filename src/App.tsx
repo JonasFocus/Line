@@ -11,6 +11,7 @@ import { LIBRARY_PERSIST_FAILED_MESSAGE, loadPersistedDocuments, removeDocumentF
 import { libraryPaneHeading, resolveActiveFilter, resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
 import { isMarkdownEditorTarget, shouldFocusLibrarySearchOnFind } from './findShortcut'
+import { appShellClassName } from './focusMode'
 import { resolveLibraryKeyboardTarget } from './libraryKeyboard'
 import { type EditorMode, resolveMenuLayoutAction } from './menuLayout'
 import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
@@ -261,7 +262,7 @@ function ModeControl({ mode, onMode, disabled = false }: { mode: EditorMode; onM
   return <div className="segmented mode-control">{modes.map((item) => <PlainButton active={mode === item.mode} disabled={disabled} icon={item.icon} key={item.mode} label={item.label} onClick={() => onMode(item.mode)} />)}</div>
 }
 
-function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, onMode, onSave, onNew, onOpen, inspectorOpen, onInspector }: {
+function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, onMode, onSave, onNew, onOpen, inspectorOpen, onInspector, focusMode, onFocusMode }: {
   document: LineDocument | null
   mode: EditorMode
   saveState: SaveState
@@ -273,6 +274,8 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
   onOpen: () => void
   inspectorOpen: boolean
   onInspector: () => void
+  focusMode: boolean
+  onFocusMode: () => void
 }) {
   const wordCount = document ? countWords(document.content) : 0
   const fileLabel = footerFileLabel(document?.path)
@@ -289,6 +292,7 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
             <Icon name="save" size={16} />
             <span>{resolveSaveChipLabel(document, saveState)}</span>
           </button>
+          <PlainButton active={focusMode} icon="panel" label="Focus mode" onClick={onFocusMode} />
           <PlainButton active={inspectorOpen} icon="inspector" label="Toggle inspector" onClick={onInspector} />
         </div>
       </header>
@@ -381,6 +385,7 @@ export default function App() {
   const [outlineSearch, setOutlineSearch] = useState('')
   const [mode, setMode] = useState<EditorMode>(() => readPersistedSessionChrome().mode)
   const [inspectorOpen, setInspectorOpen] = useState(() => readPersistedSessionChrome().inspectorOpen)
+  const [focusMode, setFocusMode] = useState(false)
   const [saveState, setSaveState] = useState<SaveState>(() => {
     const initialDocuments = readPersistedDocuments()
     const selected = initialDocuments.find((document) => document.id === readPersistedSessionChrome(initialDocuments).selectedId)
@@ -896,6 +901,7 @@ export default function App() {
       if (action === 'save-as') void saveDocument(true)
       if (action === 'reveal-in-folder') void revealSelectedDocument()
       if (action === 'toggle-inspector') setInspectorOpen((current) => !current)
+      if (action === 'toggle-focus') setFocusMode((current) => !current)
       const nextMode = resolveMenuLayoutAction(action)
       if (nextMode) setMode(nextMode)
     }
@@ -932,6 +938,10 @@ export default function App() {
         event.preventDefault()
         const input = document.querySelector<HTMLInputElement>('.document-search input')
         input?.focus()
+      }
+      if (event.key.toLowerCase() === 'f' && event.shiftKey) {
+        event.preventDefault()
+        setFocusMode((current) => !current)
       }
       if (event.key.toLowerCase() === 'i' && event.shiftKey) { event.preventDefault(); setInspectorOpen((current) => !current) }
       if (!selectedIdRef.current) return
@@ -983,7 +993,7 @@ export default function App() {
   }, [documents, synchronizeSelection])
 
   return (
-    <div className={`app-shell ${inspectorOpen ? 'inspector-visible' : 'inspector-hidden'}`}>
+    <div className={appShellClassName({ inspectorOpen, focusMode })}>
       <Sidebar
         activeFilter={activeFilter}
         activeTag={activeTag}
@@ -1035,9 +1045,11 @@ export default function App() {
       />
       <Workspace
         document={selectedDocument}
+        focusMode={focusMode}
         inspectorOpen={inspectorOpen}
         mode={mode}
         onDocumentChange={updateDocument}
+        onFocusMode={() => setFocusMode((current) => !current)}
         onInspector={() => setInspectorOpen((current) => !current)}
         onMode={setMode}
         onNew={createDocument}

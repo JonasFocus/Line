@@ -87,6 +87,23 @@ textarea:focus-visible {
   grid-template-columns: 300px 330px minmax(470px, 1fr);
 }
 
+.app-shell.focus-mode {
+  grid-template-columns: minmax(470px, 1fr) 350px;
+}
+
+.app-shell.focus-mode.inspector-hidden {
+  grid-template-columns: minmax(470px, 1fr);
+}
+
+.app-shell.focus-mode .sidebar,
+.app-shell.focus-mode .document-pane {
+  display: none;
+}
+
+.app-shell.focus-mode .workspace-toolbar {
+  padding-left: 80px;
+}
+
 .pane {
   position: relative;
   min-width: 0;
@@ -1034,6 +1051,10 @@ textarea:focus-visible {
 @media (max-width: 1180px) {
   .app-shell,
   .app-shell.inspector-hidden { grid-template-columns: 250px 290px minmax(420px, 1fr); }
+  .app-shell.focus-mode,
+  .app-shell.focus-mode.inspector-hidden {
+    grid-template-columns: minmax(420px, 1fr);
+  }
   .inspector { display: none; }
   .workspace-toolbar { grid-template-columns: minmax(90px, 1fr) auto minmax(130px, 1fr); }
   .workspace-actions .icon-button:last-child { display: none; }

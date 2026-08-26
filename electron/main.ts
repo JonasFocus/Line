@@ -476,6 +476,11 @@ function installApplicationMenu(): void {
           accelerator: 'CommandOrControl+Shift+I',
           click: () => sendMenuCommand('toggle-inspector'),
         },
+        {
+          label: 'Focus Mode',
+          accelerator: 'CommandOrControl+Shift+F',
+          click: () => sendMenuCommand('toggle-focus'),
+        },
         { type: 'separator' },
         { role: 'togglefullscreen' },
         ...(app.isPackaged

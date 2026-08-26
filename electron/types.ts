@@ -27,6 +27,7 @@ export type MenuCommand =
   | 'split-mode'
   | 'preview-mode'
   | 'toggle-inspector'
+  | 'toggle-focus'
 export type PrepareCloseAction = 'save' | 'preserve'
 
 export interface LineDocument {
