@@ -84,8 +84,14 @@ export function FirstOpen({ onComplete }: FirstOpenProps) {
   const finish = () => {
     if (!name || leaving) return
     setLeaving(true)
-    window.setTimeout(() => onComplete(name), 220)
   }
+
+  useEffect(() => {
+    if (!leaving) return
+    const ms = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 220
+    const timer = window.setTimeout(() => onComplete(name), ms)
+    return () => window.clearTimeout(timer)
+  }, [leaving, name, onComplete])
 
   return (
     <div className={`first-open ${leaving ? 'is-leaving' : ''}`}>
@@ -97,10 +103,10 @@ export function FirstOpen({ onComplete }: FirstOpenProps) {
         ref={panelRef}
         role="dialog"
       >
-        <div aria-label="Welcome steps" className="first-open-progress">
+        <p className="sr-only" aria-live="polite">Step {slide + 1} of 3</p>
+        <div aria-hidden="true" className="first-open-progress">
           {SLIDES.map((item) => (
             <span
-              aria-current={item === slide ? 'step' : undefined}
               className={`first-open-dot ${item === slide ? 'is-current' : ''} ${item < slide ? 'is-done' : ''}`}
               key={item}
             />
