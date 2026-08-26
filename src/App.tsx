@@ -20,6 +20,7 @@ import { LIBRARY_PERSIST_FAILED_MESSAGE, loadPersistedDocuments, removeDocumentF
 import { libraryPaneHeading, resolveActiveFilter, resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
 import { previewHtmlForClipboard } from './copyPreviewHtml'
+import { applyEditorIndent } from './editorIndent'
 import { isMarkdownEditorTarget, shouldFocusLibrarySearchOnFind } from './findShortcut'
 import { appShellClassName } from './focusMode'
 import { resolveLibraryKeyboardTarget } from './libraryKeyboard'
@@ -326,6 +327,28 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
                 aria-label="Markdown editor"
                 className="markdown-source"
                 onChange={(event) => onDocumentChange({ content: event.target.value })}
+                onKeyDown={(event) => {
+                  if (event.metaKey || event.ctrlKey || event.altKey) return
+                  const textarea = event.currentTarget
+                  const result = applyEditorIndent(
+                    {
+                      value: textarea.value,
+                      selectionStart: textarea.selectionStart,
+                      selectionEnd: textarea.selectionEnd,
+                    },
+                    event.key,
+                    event.shiftKey,
+                  )
+                  if (!result) return
+                  event.preventDefault()
+                  if (result.value !== textarea.value) {
+                    onDocumentChange({ content: result.value })
+                  }
+                  const { selectionStart, selectionEnd } = result
+                  window.requestAnimationFrame(() => {
+                    textarea.setSelectionRange(selectionStart, selectionEnd)
+                  })
+                }}
                 placeholder={'# Your title\n\nStart writing in Markdown…'}
                 ref={textareaRef}
                 spellCheck
