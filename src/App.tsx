@@ -24,6 +24,7 @@ import { applyEditorIndent } from './editorIndent'
 import { isMarkdownEditorTarget, shouldFocusLibrarySearchOnFind } from './findShortcut'
 import { appShellClassName } from './focusMode'
 import { resolveLibraryKeyboardTarget } from './libraryKeyboard'
+import { wrapMarkdownSelection, type MarkdownWrapKind } from './markdownWrap'
 import { type EditorMode, resolveMenuLayoutAction } from './menuLayout'
 import { AUTOSAVE_DELAY_MS, shouldAutosave } from './autosave'
 import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
@@ -275,6 +276,38 @@ function DocumentList({ documents, selectedId, search, activeFilter, activeTag, 
   )
 }
 
+function markdownWrapKindFromModKey(event: { altKey: boolean; ctrlKey: boolean; key: string; metaKey: boolean; shiftKey: boolean }): MarkdownWrapKind | null {
+  if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) return null
+  const key = event.key.toLowerCase()
+  if (key === 'b') return 'bold'
+  if (key === 'i') return 'italic'
+  if (key === 'k') return 'link'
+  return null
+}
+
+function handleMarkdownWrapKeyDown(
+  event: { altKey: boolean; ctrlKey: boolean; currentTarget: HTMLTextAreaElement; key: string; metaKey: boolean; preventDefault: () => void; shiftKey: boolean; target: EventTarget },
+  onDocumentChange: (change: Partial<LineDocument>) => void,
+) {
+  if (!isMarkdownEditorTarget(event.target)) return
+  const kind = markdownWrapKindFromModKey(event)
+  if (!kind) return
+
+  event.preventDefault()
+  const textarea = event.currentTarget
+  const next = wrapMarkdownSelection({
+    value: textarea.value,
+    selectionStart: textarea.selectionStart,
+    selectionEnd: textarea.selectionEnd,
+    kind,
+  })
+  onDocumentChange({ content: next.value })
+  window.setTimeout(() => {
+    textarea.focus()
+    textarea.setSelectionRange(next.selectionStart, next.selectionEnd)
+  }, 0)
+}
+
 function ModeControl({ mode, onMode, disabled = false }: { mode: EditorMode; onMode: (mode: EditorMode) => void; disabled?: boolean }) {
   const modes: { mode: EditorMode; icon: IconName; label: string }[] = [
     { mode: 'edit', icon: 'edit', label: 'Editor' },
@@ -328,6 +361,7 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
                 className="markdown-source"
                 onChange={(event) => onDocumentChange({ content: event.target.value })}
                 onKeyDown={(event) => {
+                  handleMarkdownWrapKeyDown(event, onDocumentChange)
                   if (event.metaKey || event.ctrlKey || event.altKey) return
                   const textarea = event.currentTarget
                   const result = applyEditorIndent(
