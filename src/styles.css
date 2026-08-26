@@ -782,6 +782,22 @@ textarea:focus-visible {
   border-radius: 8px;
 }
 .markdown-preview pre code { padding: 0; background: transparent; }
+.markdown-preview table {
+  width: 100%;
+  margin: 0 0 26px;
+  border-collapse: collapse;
+  font-size: 0.94em;
+  line-height: 1.5;
+}
+.markdown-preview th,
+.markdown-preview td {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+}
+.markdown-preview th {
+  color: #dadadd;
+  font-weight: 650;
+}
 
 .editor-footer {
   position: absolute;
