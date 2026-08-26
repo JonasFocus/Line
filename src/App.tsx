@@ -8,9 +8,9 @@ import { LIBRARY_PERSIST_FAILED_MESSAGE, loadPersistedDocuments, removeDocumentF
 import { libraryPaneHeading, resolveActiveFilter, resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
 import { shouldFocusLibrarySearchOnFind } from './findShortcut'
+import { type EditorMode, resolveMenuLayoutAction } from './menuLayout'
 import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
 
-type EditorMode = 'edit' | 'split' | 'preview'
 type SaveRequest = {
   defaultToDocuments: boolean
   document: LineDocument
@@ -817,6 +817,8 @@ export default function App() {
       if (action === 'save') void saveDocument()
       if (action === 'save-as') void saveDocument(true)
       if (action === 'toggle-inspector') setInspectorOpen((current) => !current)
+      const nextMode = resolveMenuLayoutAction(action)
+      if (nextMode) setMode(nextMode)
     }
     const api = lineApi()
     const disposeMenu = api?.onMenuCommand?.(handleAction)
@@ -852,9 +854,9 @@ export default function App() {
       }
       if (event.key.toLowerCase() === 'i' && event.shiftKey) { event.preventDefault(); setInspectorOpen((current) => !current) }
       if (!selectedIdRef.current) return
-      if (event.key === '1') setMode('edit')
-      if (event.key === '2') setMode('split')
-      if (event.key === '3') setMode('preview')
+      if (event.key === '1') { event.preventDefault(); setMode('edit') }
+      if (event.key === '2') { event.preventDefault(); setMode('split') }
+      if (event.key === '3') { event.preventDefault(); setMode('preview') }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)

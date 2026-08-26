@@ -427,6 +427,28 @@ function installApplicationMenu(): void {
     {
       label: 'View',
       submenu: [
+        {
+          label: 'Editor',
+          accelerator: 'CommandOrControl+1',
+          click: () => sendMenuCommand('edit-mode'),
+        },
+        {
+          label: 'Split View',
+          accelerator: 'CommandOrControl+2',
+          click: () => sendMenuCommand('split-mode'),
+        },
+        {
+          label: 'Preview',
+          accelerator: 'CommandOrControl+3',
+          click: () => sendMenuCommand('preview-mode'),
+        },
+        { type: 'separator' },
+        {
+          label: 'Inspector',
+          accelerator: 'CommandOrControl+Shift+I',
+          click: () => sendMenuCommand('toggle-inspector'),
+        },
+        { type: 'separator' },
         { role: 'togglefullscreen' },
         ...(app.isPackaged
           ? []
