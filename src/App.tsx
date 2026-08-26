@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { FirstOpen } from './components/FirstOpen'
 import { Icon, type IconName } from './components/Icon'
 import { extractOutline, MarkdownPreview, type OutlineItem } from './components/MarkdownPreview'
 import { buildDocumentStats } from './documentStats'
@@ -27,6 +28,7 @@ import { resolveLibraryKeyboardTarget } from './libraryKeyboard'
 import { type EditorMode, resolveMenuLayoutAction } from './menuLayout'
 import { AUTOSAVE_DELAY_MS, shouldAutosave } from './autosave'
 import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
+import { loadFirstOpen, saveFirstOpen, shouldShowFirstOpen } from './firstOpen'
 import { loadSessionChrome, saveSessionChrome, type SessionChrome } from './sessionChrome'
 type SaveRequest = {
   defaultToDocuments: boolean
@@ -72,6 +74,10 @@ const ATOMIC_SAVE_UNAVAILABLE_MESSAGE =
 
 function readPersistedDocuments(): LineDocument[] {
   return removeLegacyDemoDocuments(loadPersistedDocuments(() => window.localStorage, []))
+}
+
+function readPersistedWriterName(): string | null {
+  return loadFirstOpen(() => window.localStorage)?.name ?? null
 }
 
 function readPersistedSessionChrome(documents: LineDocument[] = readPersistedDocuments()) {
@@ -284,7 +290,7 @@ function ModeControl({ mode, onMode, disabled = false }: { mode: EditorMode; onM
   return <div className="segmented mode-control">{modes.map((item) => <PlainButton active={mode === item.mode} disabled={disabled} icon={item.icon} key={item.mode} label={item.label} onClick={() => onMode(item.mode)} />)}</div>
 }
 
-function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, onMode, onSave, onNew, onOpen, inspectorOpen, onInspector, focusMode, onFocusMode }: {
+function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, onMode, onSave, onNew, onOpen, inspectorOpen, onInspector, focusMode, onFocusMode, writerName }: {
   document: LineDocument | null
   mode: EditorMode
   saveState: SaveState
@@ -298,6 +304,7 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
   onInspector: () => void
   focusMode: boolean
   onFocusMode: () => void
+  writerName: string | null
 }) {
   const wordCount = document ? countWords(document.content) : 0
   const fileLabel = footerFileLabel(document?.path)
@@ -367,7 +374,7 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
       ) : (
         <div className="workspace-empty">
           <span><Icon name="edit" size={28} /></span>
-          <p className="workspace-kicker">LINE FOR MARKDOWN</p>
+          <p className="workspace-kicker">{writerName ? `Hello, ${writerName}` : 'LINE FOR MARKDOWN'}</p>
           <h2>Write something worth keeping.</h2>
           <p>Create a clean Markdown file or open one already on your Mac.</p>
           <div className="workspace-empty-actions">
@@ -510,6 +517,8 @@ export default function App() {
   const [mode, setMode] = useState<EditorMode>(() => readPersistedSessionChrome().mode)
   const [inspectorOpen, setInspectorOpen] = useState(() => readPersistedSessionChrome().inspectorOpen)
   const [focusMode, setFocusMode] = useState(false)
+  const [writerName, setWriterName] = useState<string | null>(readPersistedWriterName)
+  const [firstOpenVisible, setFirstOpenVisible] = useState(() => shouldShowFirstOpen(loadFirstOpen(() => window.localStorage)))
   const [saveState, setSaveState] = useState<SaveState>(() => {
     const initialDocuments = readPersistedDocuments()
     const selected = initialDocuments.find((document) => document.id === readPersistedSessionChrome(initialDocuments).selectedId)
@@ -1061,6 +1070,7 @@ export default function App() {
 
   useEffect(() => {
     const handleAction = (action: string) => {
+      if (firstOpenVisible) return
       if (action === 'new') void createDocument()
       if (action === 'duplicate') duplicateDocument()
       if (action === 'open' || action === 'import') void importDocument()
@@ -1091,10 +1101,11 @@ export default function App() {
       if (typeof disposeExternal === 'function') disposeExternal()
       if (typeof disposeExternalFailed === 'function') disposeExternalFailed()
     }
-  }, [acceptExternalDocuments, copyPreviewHtml, createDocument, duplicateDocument, importDocument, revealSelectedDocument, saveDocument])
+  }, [acceptExternalDocuments, copyPreviewHtml, createDocument, duplicateDocument, firstOpenVisible, importDocument, revealSelectedDocument, saveDocument])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (firstOpenVisible) return
       if (!(event.metaKey || event.ctrlKey)) return
       if (event.key.toLowerCase() === 'n') { event.preventDefault(); void createDocument() }
       if (event.key.toLowerCase() === 'd' && event.shiftKey) { event.preventDefault(); duplicateDocument() }
@@ -1120,10 +1131,11 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [copyPreviewHtml, createDocument, duplicateDocument, importDocument, revealSelectedDocument, saveDocument])
+  }, [copyPreviewHtml, createDocument, duplicateDocument, firstOpenVisible, importDocument, revealSelectedDocument, saveDocument])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (firstOpenVisible) return
       if (event.metaKey || event.ctrlKey || event.altKey) return
       if (!isLibraryKeyboardScope(event.target) && !isLibraryKeyboardScope(document.activeElement)) return
 
@@ -1139,7 +1151,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [synchronizeSelection])
+  }, [firstOpenVisible, synchronizeSelection])
 
   useEffect(() => {
     if (!selectedId) return
@@ -1161,8 +1173,15 @@ export default function App() {
     synchronizeSelection(nextSelectedId)
   }, [documents, synchronizeSelection])
 
+  const completeFirstOpen = useCallback((name: string) => {
+    saveFirstOpen(() => window.localStorage, name)
+    setWriterName(name)
+    setFirstOpenVisible(false)
+  }, [])
+
   return (
-    <div className={appShellClassName({ inspectorOpen, focusMode })}>
+    <>
+    <div className={appShellClassName({ inspectorOpen, focusMode })} inert={firstOpenVisible || undefined}>
       <Sidebar
         activeFilter={activeFilter}
         activeTag={activeTag}
@@ -1232,6 +1251,7 @@ export default function App() {
         onSave={() => void saveDocument()}
         saveState={saveState}
         textareaRef={textareaRef}
+        writerName={writerName}
       />
       {inspectorOpen && (
         <Inspector
@@ -1275,5 +1295,7 @@ export default function App() {
         </div>
       )}
     </div>
+    {firstOpenVisible && <FirstOpen onComplete={completeFirstOpen} />}
+    </>
   )
 }
