@@ -408,6 +408,11 @@ function installApplicationMenu(): void {
           click: () => sendMenuCommand('new'),
         },
         {
+          label: 'Duplicate',
+          accelerator: 'CommandOrControl+Shift+D',
+          click: () => sendMenuCommand('duplicate'),
+        },
+        {
           label: 'Open…',
           accelerator: 'CommandOrControl+O',
           click: () => sendMenuCommand('open'),

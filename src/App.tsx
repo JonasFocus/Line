@@ -5,6 +5,7 @@ import { footerFileLabel, formatReadTimeLabel, formatWordCountLabel } from './ed
 import { countWords, estimateReadTime, parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
 import { canRevealDocument } from './canRevealDocument'
+import { duplicateLineDocument } from './duplicateDocument'
 import { documentIsUnlinked, type LineDocument } from './lineDocument'
 import { LIBRARY_PERSIST_FAILED_MESSAGE, loadPersistedDocuments, removeDocumentFromLibrary, removeLegacyDemoDocuments, restoreDocumentToLibrary, savePersistedDocuments } from './persistedLibrary'
 import { libraryPaneHeading, resolveActiveFilter, resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
@@ -498,6 +499,27 @@ export default function App() {
     setSaveState('dirty')
   }, [selectedId])
 
+  const duplicateDocument = useCallback(() => {
+    if (closeReadyRef.current) return
+    const current = documentsRef.current.find((document) => document.id === selectedIdRef.current)
+    if (!current) return
+
+    const copy = duplicateLineDocument(current, crypto.randomUUID?.() ?? `note-${Date.now()}`)
+    const nextDocuments = [copy, ...documentsRef.current]
+    documentsRef.current = nextDocuments
+    setDocuments(nextDocuments)
+    selectedIdRef.current = copy.id
+    setSelectedId(copy.id)
+    setMode('edit')
+    setError(null)
+    setActiveFilter('all')
+    setActiveTag(null)
+    setSearch('')
+    setSaveState('dirty')
+    window.setTimeout(() => textareaRef.current?.focus(), 0)
+    showToast('Document duplicated')
+  }, [showToast])
+
   const createDocument = useCallback(async () => {
     if (closeReadyRef.current) return
     const draft: LineDocument = {
@@ -857,6 +879,7 @@ export default function App() {
   useEffect(() => {
     const handleAction = (action: string) => {
       if (action === 'new') void createDocument()
+      if (action === 'duplicate') duplicateDocument()
       if (action === 'open' || action === 'import') void importDocument()
       if (action === 'save') void saveDocument()
       if (action === 'save-as') void saveDocument(true)
@@ -883,12 +906,13 @@ export default function App() {
       if (typeof disposeExternal === 'function') disposeExternal()
       if (typeof disposeExternalFailed === 'function') disposeExternalFailed()
     }
-  }, [acceptExternalDocuments, createDocument, importDocument, revealSelectedDocument, saveDocument])
+  }, [acceptExternalDocuments, createDocument, duplicateDocument, importDocument, revealSelectedDocument, saveDocument])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!(event.metaKey || event.ctrlKey)) return
       if (event.key.toLowerCase() === 'n') { event.preventDefault(); void createDocument() }
+      if (event.key.toLowerCase() === 'd' && event.shiftKey) { event.preventDefault(); duplicateDocument() }
       if (event.key.toLowerCase() === 'o') { event.preventDefault(); void importDocument() }
       if (event.key.toLowerCase() === 's') { event.preventDefault(); void saveDocument(event.shiftKey) }
       if (event.key.toLowerCase() === 'j' && event.shiftKey) { event.preventDefault(); void revealSelectedDocument() }
@@ -906,7 +930,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [createDocument, importDocument, revealSelectedDocument, saveDocument])
+  }, [createDocument, duplicateDocument, importDocument, revealSelectedDocument, saveDocument])
 
   useEffect(() => () => {
     if (toastTimer.current) window.clearTimeout(toastTimer.current)

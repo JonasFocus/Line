@@ -18,6 +18,7 @@ export const IPC_CHANNELS = {
 
 export type MenuCommand =
   | 'new'
+  | 'duplicate'
   | 'open'
   | 'save'
   | 'save-as'
