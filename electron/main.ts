@@ -4,6 +4,7 @@ import {
   dialog,
   ipcMain,
   Menu,
+  screen,
   session,
   shell,
   type MenuItemConstructorOptions,
@@ -11,6 +12,7 @@ import {
   type SaveDialogOptions,
 } from 'electron'
 import { randomUUID } from 'node:crypto'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -56,11 +58,23 @@ import {
   resolveUnsavedCloseAction,
   UNSAVED_CLOSE_BUTTONS,
 } from './unsavedClose'
+import {
+  DEFAULT_WINDOW_HEIGHT,
+  DEFAULT_WINDOW_WIDTH,
+  loadWindowState,
+  MIN_WINDOW_HEIGHT,
+  MIN_WINDOW_WIDTH,
+  saveWindowState,
+  type WindowBounds,
+  type WindowState,
+} from './windowState'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const grantedPaths = new Set<string>()
 const externalFileQueue = new ExternalFileQueue()
 const documentSaveQueue = new KeyedTaskQueue()
+const WINDOW_STATE_SAVE_DEBOUNCE_MS = 200
+const WINDOW_STATE_FILE_NAME = 'window-state.json'
 
 let mainWindow: BrowserWindow | null = null
 let allowWindowClose = false
@@ -591,15 +605,37 @@ async function sendExternalDocuments(filePaths: string[]): Promise<void> {
   notifyExternalOpenFailures(failures, targetWindow)
 }
 
+function windowStateFilePath(): string {
+  return path.join(app.getPath('userData'), WINDOW_STATE_FILE_NAME)
+}
+
+function readWindowStateFile(filePath: string): string {
+  return readFileSync(filePath, 'utf8')
+}
+
+function writeWindowStateFile(filePath: string, contents: string): void {
+  writeFileSync(filePath, contents, 'utf8')
+}
+
+function loadRestoredWindowState(): WindowState | null {
+  return loadWindowState(
+    windowStateFilePath(),
+    (saved) => screen.getDisplayNearestPoint({ x: saved.x, y: saved.y }).workArea,
+    readWindowStateFile,
+  )
+}
+
 function createWindow(): BrowserWindow {
   externalFileQueue.resetRenderer()
   allowWindowClose = false
   clearClosePreparation()
+  const restored = loadRestoredWindowState()
   const window = new BrowserWindow({
-    width: 1520,
-    height: 960,
-    minWidth: 1040,
-    minHeight: 680,
+    width: restored?.width ?? DEFAULT_WINDOW_WIDTH,
+    height: restored?.height ?? DEFAULT_WINDOW_HEIGHT,
+    ...(restored ? { x: restored.x, y: restored.y } : {}),
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
     show: false,
     backgroundColor: '#0a0a0a',
     title: 'Line',
@@ -615,7 +651,54 @@ function createWindow(): BrowserWindow {
     },
   })
 
-  window.once('ready-to-show', () => window.show())
+  let lastNormalBounds: WindowBounds = restored
+    ? { x: restored.x, y: restored.y, width: restored.width, height: restored.height }
+    : window.getBounds()
+  let saveTimer: ReturnType<typeof setTimeout> | null = null
+
+  const persistWindowState = (): void => {
+    if (window.isDestroyed()) return
+    const isMaximized = window.isMaximized()
+    if (!isMaximized && !window.isMinimized()) {
+      lastNormalBounds = window.getBounds()
+    }
+    try {
+      saveWindowState(
+        windowStateFilePath(),
+        lastNormalBounds,
+        isMaximized,
+        writeWindowStateFile,
+      )
+    } catch {
+      return
+    }
+  }
+
+  const schedulePersistWindowState = (): void => {
+    if (saveTimer !== null) {
+      clearTimeout(saveTimer)
+    }
+    saveTimer = setTimeout(() => {
+      saveTimer = null
+      persistWindowState()
+    }, WINDOW_STATE_SAVE_DEBOUNCE_MS)
+  }
+
+  window.once('ready-to-show', () => {
+    if (restored?.isMaximized) {
+      window.maximize()
+    }
+    window.show()
+  })
+  window.on('resize', schedulePersistWindowState)
+  window.on('move', schedulePersistWindowState)
+  window.on('close', () => {
+    if (saveTimer !== null) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+    }
+    persistWindowState()
+  })
   window.webContents.on('will-prevent-unload', (event) => {
     if (allowWindowClose) {
       event.preventDefault()
