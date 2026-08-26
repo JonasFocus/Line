@@ -275,6 +275,23 @@ function listItem(line: string): { ordered: boolean; text: string } | null {
   return null;
 }
 
+function parseTaskMarker(text: string): { checked: boolean; rest: string } | null {
+  if (text.startsWith("[ ] ")) return { checked: false, rest: text.slice(4) };
+  if (text.startsWith("[x] ") || text.startsWith("[X] ")) return { checked: true, rest: text.slice(4) };
+  return null;
+}
+
+function renderListItem(item: { ordered: boolean; text: string }): string {
+  if (!item.ordered) {
+    const task = parseTaskMarker(item.text);
+    if (task) {
+      const checked = task.checked ? " checked" : "";
+      return `<li class="task-item"><input type="checkbox" disabled${checked}> ${renderInline(task.rest)}</li>`;
+    }
+  }
+  return `<li>${renderInline(item.text)}</li>`;
+}
+
 export function renderMarkdown(markdown: string): string {
   const lines = removeFrontmatter(markdown).split(/\r?\n/);
   const headings = deriveHeadings(markdown);
@@ -337,7 +354,7 @@ export function renderMarkdown(markdown: string): string {
       while (index < lines.length) {
         const nextItem = listItem(lines[index]);
         if (!nextItem || nextItem.ordered !== ordered) break;
-        items.push(`<li>${renderInline(nextItem.text)}</li>`);
+        items.push(renderListItem(nextItem));
         index += 1;
       }
       const tag = ordered ? "ol" : "ul";

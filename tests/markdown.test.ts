@@ -195,6 +195,33 @@ const answer = 42 < 100;
     expect(html).toContain("<del>&lt;em&gt;raw&lt;/em&gt;</del>");
     expect(html).not.toContain("<em>raw</em>");
   });
+
+  it("renders unchecked and checked task list items as disabled checkboxes", () => {
+    const html = renderMarkdown("- [ ] write tests\n- [x] ship it\n- [X] also done");
+    expect(html).toContain(
+      '<li class="task-item"><input type="checkbox" disabled> write tests</li>',
+    );
+    expect(html).toContain(
+      '<li class="task-item"><input type="checkbox" disabled checked> ship it</li>',
+    );
+    expect(html).toContain(
+      '<li class="task-item"><input type="checkbox" disabled checked> also done</li>',
+    );
+  });
+
+  it("mixes task items with normal bullets in the same unordered list", () => {
+    const html = renderMarkdown("- milk\n- [ ] eggs\n- bread");
+    expect(html).toBe(
+      '<ul><li>milk</li><li class="task-item"><input type="checkbox" disabled> eggs</li><li>bread</li></ul>',
+    );
+  });
+
+  it("does not treat [x] inside paragraph text as a task", () => {
+    const html = renderMarkdown("Remember the [x] marker is not a list.");
+    expect(html).not.toContain('type="checkbox"');
+    expect(html).not.toContain("task-item");
+    expect(html).toContain("[x]");
+  });
 });
 
 describe("Document model", () => {

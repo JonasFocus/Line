@@ -737,6 +737,14 @@ textarea:focus-visible {
 .markdown-preview ul,
 .markdown-preview ol { margin: -4px 0 26px; padding-left: 24px; }
 .markdown-preview li { margin: 5px 0; }
+.markdown-preview li.task-item {
+  list-style: none;
+}
+.markdown-preview li.task-item input[type="checkbox"] {
+  margin: 0 0.45em 0.2em -1.4em;
+  vertical-align: middle;
+  pointer-events: none;
+}
 .markdown-preview code {
   padding: 2px 5px;
   color: #cacacd;
