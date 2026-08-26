@@ -45,6 +45,20 @@ describe('restorePersistedDocuments', () => {
     }])
   })
 
+  it('keeps a finite updatedAtMs and omits invalid values', () => {
+    const restored = restorePersistedDocuments(JSON.stringify([
+      { id: 'dated', title: 'Dated', content: 'Dated', tags: [], updatedAtMs: 1_700_000_000_000 },
+      { id: 'zero', title: 'Zero', content: 'Zero', tags: [], updatedAtMs: 0 },
+      { id: 'invalid', title: 'Invalid', content: 'Invalid', tags: [], updatedAtMs: 'yesterday' },
+      { id: 'infinite', title: 'Infinite', content: 'Infinite', tags: [], updatedAtMs: Number.POSITIVE_INFINITY },
+    ]), [fallback])
+
+    expect(restored[0].updatedAtMs).toBe(1_700_000_000_000)
+    expect(restored[1].updatedAtMs).toBe(0)
+    expect(restored[2]).not.toHaveProperty('updatedAtMs')
+    expect(restored[3]).not.toHaveProperty('updatedAtMs')
+  })
+
   it('normalizes legacy records and derives missing metadata from their content', () => {
     const restored = restorePersistedDocuments(JSON.stringify([{
       id: 'legacy',

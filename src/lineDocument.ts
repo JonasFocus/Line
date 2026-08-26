@@ -6,6 +6,7 @@ export interface LineDocument {
   tags: string[]
   favorite: boolean
   updatedAt: string
+  updatedAtMs?: number
   path: string | null
   revision: string | null
   dirty?: boolean
