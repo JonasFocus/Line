@@ -21,6 +21,9 @@
   --accent-soft: rgba(35, 136, 238, 0.14);
   --mono: "SFMono-Regular", "SF Mono", Menlo, Monaco, Consolas, monospace;
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --pane-sidebar: 260px;
+  --pane-library: 280px;
+  --pane-inspector: 300px;
 }
 
 * {
@@ -76,7 +79,7 @@ textarea:focus-visible {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 300px 330px minmax(470px, 1fr) 350px;
+  grid-template-columns: var(--pane-sidebar) var(--pane-library) minmax(470px, 1fr) var(--pane-inspector);
   width: 100%;
   height: 100dvh;
   min-height: 560px;
@@ -85,11 +88,11 @@ textarea:focus-visible {
 }
 
 .app-shell.inspector-hidden {
-  grid-template-columns: 300px 330px minmax(470px, 1fr);
+  grid-template-columns: var(--pane-sidebar) var(--pane-library) minmax(470px, 1fr);
 }
 
 .app-shell.focus-mode {
-  grid-template-columns: minmax(470px, 1fr) 350px;
+  grid-template-columns: minmax(470px, 1fr) var(--pane-inspector);
 }
 
 .app-shell.focus-mode.inspector-hidden {
@@ -128,14 +131,14 @@ textarea:focus-visible {
 
 .icon-button {
   display: inline-grid;
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   padding: 0;
   place-items: center;
   color: #bfc0c3;
   background: transparent;
   border: 1px solid transparent;
-  border-radius: 10px;
+  border-radius: 8px;
   transition: color 160ms ease, background 160ms ease, transform 120ms ease;
 }
 
@@ -145,7 +148,7 @@ textarea:focus-visible {
 }
 
 .icon-button:active {
-  transform: scale(0.94);
+  transform: scale(0.96);
 }
 
 .icon-button.is-active {
@@ -192,8 +195,8 @@ textarea:focus-visible {
 .document-toolbar,
 .workspace-toolbar,
 .inspector-toolbar {
-  height: 61px;
-  min-height: 61px;
+  height: 56px;
+  min-height: 56px;
   border-bottom: 1px solid var(--border-soft);
 }
 
@@ -207,7 +210,7 @@ textarea:focus-visible {
   display: flex;
   gap: 2px;
   margin-left: auto;
-  padding-right: 10px;
+  padding-right: 8px;
 }
 
 .sidebar-scroll {
@@ -225,7 +228,7 @@ textarea:focus-visible {
 .section-label {
   margin: 12px 8px 7px;
   color: #66666a;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 650;
   letter-spacing: 0.01em;
 }
@@ -234,12 +237,12 @@ textarea:focus-visible {
   display: grid;
   grid-template-columns: 17px 19px minmax(0, 1fr) auto;
   width: 100%;
-  min-height: 34px;
+  min-height: 30px;
   align-items: center;
   gap: 5px;
-  padding: 5px 8px;
+  padding: 4px 6px;
   color: #d2d2d5;
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 520;
   text-align: left;
   background: transparent;
@@ -265,7 +268,7 @@ textarea:focus-visible {
 
 .nav-row small {
   color: #818185;
-  font-size: 11px;
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -294,7 +297,7 @@ textarea:focus-visible {
   overflow: hidden;
   padding: 4px 9px;
   color: #818185;
-  font-size: 11px;
+  font-size: 10.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
   background: #242426;
@@ -319,14 +322,14 @@ textarea:focus-visible {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px 0 18px;
+  padding: 0 8px 0 14px;
 }
 
 .document-heading {
   max-width: 130px;
   overflow: hidden;
   color: #d9d9db;
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -362,7 +365,7 @@ textarea:focus-visible {
   min-width: 0;
   padding: 0;
   color: #dadadd;
-  font-size: 12.5px;
+  font-size: 12px;
   background: transparent;
   border: 0;
   outline: 0;
@@ -395,8 +398,8 @@ textarea:focus-visible {
   position: relative;
   display: block;
   width: 100%;
-  min-height: 112px;
-  padding: 15px 13px 13px;
+  min-height: 104px;
+  padding: 12px 11px 11px;
   color: var(--text-soft);
   text-align: left;
   background: transparent;
@@ -443,7 +446,7 @@ textarea:focus-visible {
   min-width: 0;
   overflow: hidden;
   color: #dcdcdf;
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 680;
   line-height: 1.25;
   text-overflow: ellipsis;
@@ -466,7 +469,7 @@ textarea:focus-visible {
 .favorite-control,
 .remove-control {
   position: absolute;
-  top: 11px;
+  top: 8px;
   display: grid;
   width: 28px;
   height: 28px;
@@ -494,7 +497,7 @@ textarea:focus-visible {
   margin-top: 7px;
   overflow: hidden;
   color: #929297;
-  font-size: 11.5px;
+  font-size: 11px;
   line-height: 1.35;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -509,7 +512,7 @@ textarea:focus-visible {
   gap: 6px;
   overflow: hidden;
   color: var(--text-muted);
-  font-size: 10.5px;
+  font-size: 10px;
   white-space: nowrap;
 }
 
@@ -517,7 +520,7 @@ textarea:focus-visible {
 .document-meta small {
   padding: 2px 6px;
   color: var(--text-muted);
-  font-size: 10px;
+  font-size: 9.5px;
   background: transparent;
   box-shadow: inset 0 0 0 1px var(--border-soft);
   border-radius: 999px;
@@ -581,7 +584,7 @@ textarea:focus-visible {
   position: relative;
   display: grid;
   grid-template-columns: minmax(90px, 1fr) auto minmax(190px, 1fr);
-  padding: 0 10px 0 16px;
+  padding: 0 8px 0 12px;
   align-items: center;
 }
 
@@ -591,7 +594,7 @@ textarea:focus-visible {
   align-items: center;
   gap: 7px;
   color: #c8c8cb;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 620;
 }
 
@@ -635,12 +638,12 @@ textarea:focus-visible {
 
 .save-status {
   display: flex;
-  height: 31px;
-  padding: 0 9px;
+  height: 28px;
+  padding: 0 8px;
   align-items: center;
   gap: 5px;
   color: #89898e;
-  font-size: 10.5px;
+  font-size: 10px;
   background: transparent;
   border-radius: 8px;
 }
@@ -853,7 +856,7 @@ textarea:focus-visible {
 
 .inspector-toolbar {
   display: flex;
-  padding: 0 12px;
+  padding: 0 10px;
   align-items: center;
 }
 
@@ -893,7 +896,7 @@ textarea:focus-visible {
   min-width: 0;
   overflow: hidden;
   color: #d8d8da;
-  font-size: 12.5px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -948,7 +951,7 @@ textarea:focus-visible {
 
 .inspector-stats dt {
   color: #9c9ca1;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 650;
 }
 
@@ -957,7 +960,7 @@ textarea:focus-visible {
   margin: 0;
   overflow: hidden;
   color: #d8d8da;
-  font-size: 12.5px;
+  font-size: 12px;
   text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -969,7 +972,7 @@ textarea:focus-visible {
   align-items: center;
   gap: 7px;
   color: #9c9ca1;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 650;
 }
 
@@ -993,7 +996,7 @@ textarea:focus-visible {
   padding: 7px 9px;
   overflow: hidden;
   color: #b9b9bc;
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 520;
   text-align: left;
   text-overflow: ellipsis;
@@ -1112,8 +1115,8 @@ textarea:focus-visible {
 }
 
 @media (max-width: 1480px) {
-  .app-shell { grid-template-columns: 260px 300px minmax(430px, 1fr) 300px; }
-  .app-shell.inspector-hidden { grid-template-columns: 260px 300px minmax(430px, 1fr); }
+  .app-shell { grid-template-columns: var(--pane-sidebar) var(--pane-library) minmax(430px, 1fr) var(--pane-inspector); }
+  .app-shell.inspector-hidden { grid-template-columns: var(--pane-sidebar) var(--pane-library) minmax(430px, 1fr); }
 }
 
 @media (max-width: 1180px) {
