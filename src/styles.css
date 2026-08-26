@@ -766,6 +766,7 @@ textarea:focus-visible {
   font-size: 9.5px;
   pointer-events: none;
 }
+.editor-footer span[title] { pointer-events: auto; }
 
 .workspace-empty {
   display: flex;
