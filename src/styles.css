@@ -87,6 +87,19 @@ textarea:focus-visible {
   grid-template-columns: 300px 330px minmax(470px, 1fr);
 }
 
+.app-shell.focus-mode {
+  grid-template-columns: minmax(470px, 1fr) 350px;
+}
+
+.app-shell.focus-mode.inspector-hidden {
+  grid-template-columns: minmax(470px, 1fr);
+}
+
+.app-shell.focus-mode .sidebar,
+.app-shell.focus-mode .document-pane {
+  display: none;
+}
+
 .pane {
   position: relative;
   min-width: 0;

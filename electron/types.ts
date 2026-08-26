@@ -15,7 +15,7 @@ export const IPC_CHANNELS = {
   prepareCloseFinished: 'line:app:prepare-close-finished',
 } as const
 
-export type MenuCommand = 'new' | 'open' | 'save' | 'save-as'
+export type MenuCommand = 'new' | 'open' | 'save' | 'save-as' | 'toggle-focus'
 export type PrepareCloseAction = 'save' | 'preserve'
 
 export interface LineDocument {

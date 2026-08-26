@@ -413,6 +413,11 @@ function installApplicationMenu(): void {
     {
       label: 'View',
       submenu: [
+        {
+          label: 'Focus Mode',
+          accelerator: 'CommandOrControl+Shift+F',
+          click: () => sendMenuCommand('toggle-focus'),
+        },
         { role: 'togglefullscreen' },
         ...(app.isPackaged
           ? []
