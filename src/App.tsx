@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { FirstOpen } from './components/FirstOpen'
 import { Icon, type IconName } from './components/Icon'
+import { PaneResizeHandle } from './components/PaneResizeHandle'
 import { extractOutline, MarkdownPreview, type OutlineItem } from './components/MarkdownPreview'
 import { buildDocumentStats } from './documentStats'
 import { footerFileLabel, formatReadTimeLabel, formatWordCountLabel } from './editorFooter'
@@ -31,6 +32,22 @@ import { AUTOSAVE_DELAY_MS, shouldAutosave } from './autosave'
 import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
 import { loadFirstOpen, saveFirstOpen, shouldShowFirstOpen } from './firstOpen'
 import { loadSessionChrome, saveSessionChrome, type SessionChrome } from './sessionChrome'
+import {
+  DEFAULT_PANE_WIDTHS,
+  clampPaneWidths,
+  loadPaneWidths,
+  resizePane,
+  savePaneWidths,
+  type PaneWidths,
+} from './paneLayout'
+
+type PaneKey = keyof PaneWidths
+
+type AppShellStyle = CSSProperties & {
+  '--pane-sidebar': string
+  '--pane-library': string
+  '--pane-inspector': string
+}
 type SaveRequest = {
   defaultToDocuments: boolean
   document: LineDocument
@@ -144,13 +161,14 @@ function TrafficLights() {
   return <div aria-hidden="true" className="traffic-lights"><i className="traffic-close" /><i className="traffic-minimize" /><i className="traffic-expand" /></div>
 }
 
-function Sidebar({ documents, activeFilter, activeTag, onFilter, onTag, onOpenFolder }: {
+function Sidebar({ documents, activeFilter, activeTag, onFilter, onTag, onOpenFolder, children }: {
   documents: LineDocument[]
   activeFilter: string
   activeTag: string | null
   onFilter: (filter: string) => void
   onTag: (tag: string | null) => void
   onOpenFolder: () => void
+  children?: ReactNode
 }) {
   const favorites = documents.filter((doc) => doc.favorite)
   const tags = Array.from(new Set(documents.flatMap((doc) => doc.tags)))
@@ -200,11 +218,12 @@ function Sidebar({ documents, activeFilter, activeTag, onFilter, onTag, onOpenFo
           </section>
         )}
       </div>
+      {children}
     </aside>
   )
 }
 
-function DocumentList({ documents, selectedId, search, activeFilter, activeTag, librarySort, onSearch, onSelect, onFavorite, onRemove, onNew, onImport, onCycleSort }: {
+function DocumentList({ documents, selectedId, search, activeFilter, activeTag, librarySort, onSearch, onSelect, onFavorite, onRemove, onNew, onImport, onCycleSort, children }: {
   documents: LineDocument[]
   selectedId: string | null
   search: string
@@ -218,6 +237,7 @@ function DocumentList({ documents, selectedId, search, activeFilter, activeTag, 
   onNew: () => void
   onImport: () => void
   onCycleSort: () => void
+  children?: ReactNode
 }) {
   const isFiltered = Boolean(search || activeTag || activeFilter === 'unlinked')
 
@@ -278,6 +298,7 @@ function DocumentList({ documents, selectedId, search, activeFilter, activeTag, 
           </div>
         )}
       </div>
+      {children}
     </section>
   )
 }
@@ -415,7 +436,7 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
 
 type InspectorTab = 'outline' | 'stats'
 
-function Inspector({ document, outline, activeId, search, onSearch, onNavigate, onClose }: {
+function Inspector({ document, outline, activeId, search, onSearch, onNavigate, onClose, children }: {
   document: LineDocument | null
   outline: OutlineItem[]
   activeId: string | null
@@ -423,6 +444,7 @@ function Inspector({ document, outline, activeId, search, onSearch, onNavigate, 
   onSearch: (value: string) => void
   onNavigate: (item: OutlineItem) => void
   onClose: () => void
+  children?: ReactNode
 }) {
   const [tab, setTab] = useState<InspectorTab>('outline')
   const outlineTabRef = useRef<HTMLButtonElement>(null)
@@ -443,6 +465,7 @@ function Inspector({ document, outline, activeId, search, onSearch, onNavigate, 
 
   return (
     <aside className="inspector pane">
+      {children}
       <header className="inspector-toolbar titlebar-region">
         <label className="inspector-search no-drag"><Icon name="search" size={16} /><input aria-label="Search outline" onChange={(event) => onSearch(event.target.value)} placeholder="Search" value={search} /></label>
       </header>
@@ -541,6 +564,16 @@ export default function App() {
   const [outlineSearch, setOutlineSearch] = useState('')
   const [mode, setMode] = useState<EditorMode>(() => readPersistedSessionChrome().mode)
   const [inspectorOpen, setInspectorOpen] = useState(() => readPersistedSessionChrome().inspectorOpen)
+  const [paneWidths, setPaneWidths] = useState<PaneWidths>(() => {
+    const chrome = readPersistedSessionChrome()
+    const loaded = loadPaneWidths(() => window.localStorage)
+    return clampPaneWidths(
+      loaded,
+      loaded,
+      window.innerWidth,
+      { inspectorOpen: chrome.inspectorOpen, focusMode: false },
+    )
+  })
   const [focusMode, setFocusMode] = useState(false)
   const [writerName, setWriterName] = useState<string | null>(readPersistedWriterName)
   const [firstOpenVisible, setFirstOpenVisible] = useState(() => shouldShowFirstOpen(loadFirstOpen(() => window.localStorage)))
@@ -554,6 +587,7 @@ export default function App() {
   const [toast, setToast] = useState<ToastState | null>(null)
   const [activeOutlineId, setActiveOutlineId] = useState<string | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const appShellRef = useRef<HTMLDivElement>(null)
   const toastTimer = useRef<number | null>(null)
   const pendingLibraryUndoRef = useRef<PendingLibraryUndo | null>(null)
   const saveQueueRef = useRef(new LatestTaskQueue<SaveRequest>())
@@ -994,6 +1028,32 @@ export default function App() {
     return saveSessionChrome(() => window.localStorage, chrome)
   }, [])
 
+  const persistPaneWidths = useCallback((widths: PaneWidths) => {
+    return savePaneWidths(() => window.localStorage, widths)
+  }, [])
+
+  const paneLayoutOptions = useMemo(
+    () => ({ inspectorOpen, focusMode }),
+    [inspectorOpen, focusMode],
+  )
+
+  const availablePaneWidth = useCallback(() => {
+    return appShellRef.current?.clientWidth ?? window.innerWidth
+  }, [])
+
+  const applyPaneResize = useCallback((key: PaneKey, deltaX: number) => {
+    setPaneWidths((current) => resizePane(current, key, deltaX, availablePaneWidth(), paneLayoutOptions))
+  }, [availablePaneWidth, paneLayoutOptions])
+
+  const resetPaneWidth = useCallback((key: PaneKey) => {
+    setPaneWidths((current) => clampPaneWidths(
+      { [key]: DEFAULT_PANE_WIDTHS[key] },
+      current,
+      availablePaneWidth(),
+      paneLayoutOptions,
+    ))
+  }, [availablePaneWidth, paneLayoutOptions])
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       if (!persistDocuments(documents)) {
@@ -1009,6 +1069,38 @@ export default function App() {
     }, 350)
     return () => window.clearTimeout(timer)
   }, [selectedId, mode, inspectorOpen, persistSessionChrome])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      persistPaneWidths(paneWidths)
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [paneWidths, persistPaneWidths])
+
+  useEffect(() => {
+    const node = appShellRef.current
+    if (!node) return
+
+    const clampToShell = () => {
+      const width = node.clientWidth
+      setPaneWidths((current) => {
+        const next = clampPaneWidths({}, current, width, paneLayoutOptions)
+        if (
+          next.sidebar === current.sidebar
+          && next.library === current.library
+          && next.inspector === current.inspector
+        ) {
+          return current
+        }
+        return next
+      })
+    }
+
+    clampToShell()
+    const observer = new ResizeObserver(clampToShell)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [paneLayoutOptions])
 
   useEffect(() => {
     const conflictBlocked =
@@ -1204,9 +1296,20 @@ export default function App() {
     setFirstOpenVisible(false)
   }, [])
 
+  const appShellStyle: AppShellStyle = {
+    '--pane-sidebar': `${paneWidths.sidebar}px`,
+    '--pane-library': `${paneWidths.library}px`,
+    '--pane-inspector': `${paneWidths.inspector}px`,
+  }
+
   return (
     <>
-    <div className={appShellClassName({ inspectorOpen, focusMode })} inert={firstOpenVisible || undefined}>
+    <div
+      className={appShellClassName({ inspectorOpen, focusMode })}
+      inert={firstOpenVisible || undefined}
+      ref={appShellRef}
+      style={appShellStyle}
+    >
       <Sidebar
         activeFilter={activeFilter}
         activeTag={activeTag}
@@ -1224,7 +1327,14 @@ export default function App() {
         }}
         onOpenFolder={openFolder}
         onTag={setActiveTag}
-      />
+      >
+        <PaneResizeHandle
+          ariaLabel="Resize sidebar"
+          edge="end"
+          onDrag={(deltaX) => applyPaneResize('sidebar', deltaX)}
+          onReset={() => resetPaneWidth('sidebar')}
+        />
+      </Sidebar>
       <DocumentList
         activeFilter={activeFilter}
         activeTag={activeTag}
@@ -1261,7 +1371,14 @@ export default function App() {
         onSelect={synchronizeSelection}
         search={search}
         selectedId={selectedId}
-      />
+      >
+        <PaneResizeHandle
+          ariaLabel="Resize library"
+          edge="end"
+          onDrag={(deltaX) => applyPaneResize('library', deltaX)}
+          onReset={() => resetPaneWidth('library')}
+        />
+      </DocumentList>
       <Workspace
         document={selectedDocument}
         focusMode={focusMode}
@@ -1287,7 +1404,14 @@ export default function App() {
           onSearch={setOutlineSearch}
           outline={outline}
           search={outlineSearch}
-        />
+        >
+          <PaneResizeHandle
+            ariaLabel="Resize inspector"
+            edge="start"
+            onDrag={(deltaX) => applyPaneResize('inspector', deltaX)}
+            onReset={() => resetPaneWidth('inspector')}
+          />
+        </Inspector>
       )}
 
       {loading && <div className="loading-bar" aria-label="Loading library"><span /></div>}
