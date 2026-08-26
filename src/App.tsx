@@ -11,6 +11,7 @@ import { libraryPaneHeading, resolveActiveFilter, resolveActiveTag, resolveSelec
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
 import { shouldFocusLibrarySearchOnFind } from './findShortcut'
 import { type EditorMode, resolveMenuLayoutAction } from './menuLayout'
+import { AUTOSAVE_DELAY_MS, shouldAutosave } from './autosave'
 import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
 import { loadSessionChrome, saveSessionChrome, type SessionChrome } from './sessionChrome'
 type SaveRequest = {
@@ -18,6 +19,7 @@ type SaveRequest = {
   document: LineDocument
   saveAs: boolean
   saveCopy: boolean
+  silent?: boolean
 }
 type ToastState = {
   message: string
@@ -611,6 +613,7 @@ export default function App() {
       document: documentToSave,
       saveAs: requestedSaveAs,
       saveCopy: requestedSaveCopy,
+      silent: requestedSilent,
     }: SaveRequest) => {
       const submittedContent = documentToSave.content
 
@@ -684,7 +687,9 @@ export default function App() {
         if (selectedIdRef.current === documentToSave.id) {
           setSaveState(hasNewerChanges ? 'dirty' : 'saved')
         }
-        showToast(hasNewerChanges ? 'Saved earlier edits; newer changes remain' : api ? 'Saved to disk' : 'Changes saved for this session')
+        if (!requestedSilent) {
+          showToast(hasNewerChanges ? 'Saved earlier edits; newer changes remain' : api ? 'Saved to disk' : 'Changes saved for this session')
+        }
         return {
           continueWithPending: true,
           updatePending: (pending: SaveRequest): SaveRequest => saved ? {
@@ -722,13 +727,14 @@ export default function App() {
     return documentsRef.current.find((document) => document.id === request.document.id)?.dirty !== true
   }, [performSave])
 
-  const saveDocument = useCallback(async (saveAs = false, saveCopy = false, defaultToDocuments = false) => {
+  const saveDocument = useCallback(async (saveAs = false, saveCopy = false, defaultToDocuments = false, options?: { silent?: boolean }) => {
     if (!selectedDocument) return false
     return saveDocumentRequest({
       defaultToDocuments,
       document: selectedDocument,
       saveAs: resolveSaveAs(selectedDocument.path, saveAs),
       saveCopy,
+      silent: options?.silent,
     })
   }, [saveDocumentRequest, selectedDocument])
 
@@ -791,6 +797,27 @@ export default function App() {
     }, 350)
     return () => window.clearTimeout(timer)
   }, [selectedId, mode, inspectorOpen, persistSessionChrome])
+
+  useEffect(() => {
+    const conflictBlocked =
+      error === DOCUMENT_CONFLICT_MESSAGE || error === ATOMIC_SAVE_UNAVAILABLE_MESSAGE
+    if (
+      conflictBlocked ||
+      !shouldAutosave({
+        dirty: selectedDocument?.dirty,
+        path: selectedDocument?.path,
+        saveState,
+      })
+    ) {
+      return
+    }
+
+    const timer = window.setTimeout(() => {
+      void saveDocument(false, false, false, { silent: true })
+    }, AUTOSAVE_DELAY_MS)
+
+    return () => window.clearTimeout(timer)
+  }, [documents, error, saveDocument, saveState, selectedDocument])
 
   useEffect(() => {
     const warnAboutUnsavedChanges = (event: BeforeUnloadEvent) => {
