@@ -78,6 +78,8 @@ const api: LineApi = Object.freeze({
   saveFile,
   chooseSaveFileAs,
   saveFileAs,
+  revealInFolder: (filePath: string) =>
+    ipcRenderer.invoke(IPC_CHANNELS.revealInFolder, filePath) as Promise<boolean>,
   saveDocument: (
     input: SaveFileAsInput & {
       path?: string | null

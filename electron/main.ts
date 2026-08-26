@@ -361,6 +361,23 @@ async function saveDocumentAs(
   return writeDocument(normalizedPath, input.content, expectedRevision)
 }
 
+async function revealInFolder(filePath: unknown): Promise<boolean> {
+  assertString(filePath, 'path')
+
+  const normalizedPath = normalizePath(filePath)
+  if (!grantedPaths.has(normalizedPath)) {
+    throw new Error('Access has not been granted for this file.')
+  }
+
+  const fileStats = await stat(normalizedPath)
+  if (!fileStats.isFile()) {
+    throw new Error('The selected item is not a file.')
+  }
+
+  shell.showItemInFolder(normalizedPath)
+  return true
+}
+
 function sendMenuCommand(command: MenuCommand): void {
   const targetWindow = BrowserWindow.getFocusedWindow() ?? mainWindow
   targetWindow?.webContents.send(IPC_CHANNELS.menuCommand, command)
@@ -405,6 +422,12 @@ function installApplicationMenu(): void {
           label: 'Save As…',
           accelerator: 'CommandOrControl+Shift+S',
           click: () => sendMenuCommand('save-as'),
+        },
+        { type: 'separator' },
+        {
+          label: 'Show in Finder',
+          accelerator: 'CommandOrControl+Shift+J',
+          click: () => sendMenuCommand('reveal-in-folder'),
         },
         { type: 'separator' },
         { role: 'close' },
@@ -496,6 +519,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle(
     IPC_CHANNELS.saveFileAs,
     (_event, input: SaveFileAsInput) => saveDocumentAs(input),
+  )
+  ipcMain.handle(IPC_CHANNELS.revealInFolder, (_event, filePath: unknown) =>
+    revealInFolder(filePath),
   )
   ipcMain.handle(
     IPC_CHANNELS.platformInfo,

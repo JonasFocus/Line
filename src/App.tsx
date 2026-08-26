@@ -4,6 +4,7 @@ import { extractOutline, MarkdownPreview, type OutlineItem } from './components/
 import { footerFileLabel, formatReadTimeLabel, formatWordCountLabel } from './editorFooter'
 import { countWords, estimateReadTime, parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
+import { canRevealDocument } from './canRevealDocument'
 import { documentIsUnlinked, type LineDocument } from './lineDocument'
 import { LIBRARY_PERSIST_FAILED_MESSAGE, loadPersistedDocuments, removeDocumentFromLibrary, removeLegacyDemoDocuments, restoreDocumentToLibrary, savePersistedDocuments } from './persistedLibrary'
 import { libraryPaneHeading, resolveActiveFilter, resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
@@ -720,6 +721,20 @@ export default function App() {
     })
   }, [saveDocumentRequest, selectedDocument])
 
+  const revealSelectedDocument = useCallback(async () => {
+    if (closeReadyRef.current) return
+    const path = documentsRef.current.find((document) => document.id === selectedIdRef.current)?.path
+    if (!canRevealDocument(path)) {
+      showToast('Save this document to reveal it in Finder')
+      return
+    }
+    try {
+      await lineApi()?.revealInFolder?.(path)
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not reveal this document in Finder.')
+    }
+  }, [showToast])
+
   const openFolder = importDocument
 
   const navigateOutline = useCallback((item: OutlineItem) => {
@@ -823,6 +838,7 @@ export default function App() {
       if (action === 'open' || action === 'import') void importDocument()
       if (action === 'save') void saveDocument()
       if (action === 'save-as') void saveDocument(true)
+      if (action === 'reveal-in-folder') void revealSelectedDocument()
       if (action === 'toggle-inspector') setInspectorOpen((current) => !current)
       const nextMode = resolveMenuLayoutAction(action)
       if (nextMode) setMode(nextMode)
@@ -845,7 +861,7 @@ export default function App() {
       if (typeof disposeExternal === 'function') disposeExternal()
       if (typeof disposeExternalFailed === 'function') disposeExternalFailed()
     }
-  }, [acceptExternalDocuments, createDocument, importDocument, saveDocument])
+  }, [acceptExternalDocuments, createDocument, importDocument, revealSelectedDocument, saveDocument])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -853,6 +869,7 @@ export default function App() {
       if (event.key.toLowerCase() === 'n') { event.preventDefault(); void createDocument() }
       if (event.key.toLowerCase() === 'o') { event.preventDefault(); void importDocument() }
       if (event.key.toLowerCase() === 's') { event.preventDefault(); void saveDocument(event.shiftKey) }
+      if (event.key.toLowerCase() === 'j' && event.shiftKey) { event.preventDefault(); void revealSelectedDocument() }
       if (event.key.toLowerCase() === 'f' && !event.shiftKey) {
         if (!shouldFocusLibrarySearchOnFind(event.target, document.activeElement)) return
         event.preventDefault()
@@ -867,7 +884,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [createDocument, importDocument, saveDocument])
+  }, [createDocument, importDocument, revealSelectedDocument, saveDocument])
 
   useEffect(() => () => {
     if (toastTimer.current) window.clearTimeout(toastTimer.current)
