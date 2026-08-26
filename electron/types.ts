@@ -6,6 +6,7 @@ export const IPC_CHANNELS = {
   saveFile: 'line:documents:save-file',
   chooseSaveFileAs: 'line:documents:choose-save-file-as',
   saveFileAs: 'line:documents:save-file-as',
+  revealInFolder: 'line:documents:reveal-in-folder',
   platformInfo: 'line:app:platform-info',
   rendererReady: 'line:app:renderer-ready',
   menuCommand: 'line:menu:command',
@@ -20,6 +21,7 @@ export type MenuCommand =
   | 'open'
   | 'save'
   | 'save-as'
+  | 'reveal-in-folder'
   | 'edit-mode'
   | 'split-mode'
   | 'preview-mode'
@@ -82,6 +84,7 @@ export interface LineApi {
   saveFile(input: SaveFileInput): Promise<LineDocument>
   chooseSaveFileAs(input: SaveFileAsInput): Promise<string | null>
   saveFileAs(input: SaveFileAsInput): Promise<LineDocument | null>
+  revealInFolder(filePath: string): Promise<boolean>
   saveDocument(
     input: SaveFileAsInput & {
       path?: string | null
