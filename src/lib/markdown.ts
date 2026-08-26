@@ -241,6 +241,7 @@ function renderInline(source: string): string {
     .replace(/__([^_]+)__/g, "<strong>$1</strong>")
     .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "<em>$1</em>")
     .replace(/(?<!_)_([^_]+)_(?!_)/g, "<em>$1</em>")
+    .replace(/~~([^~]+)~~/g, "<del>$1</del>")
     .replace(/\u0000CODE(\d+)\u0000/g, (_match, index: string) => codeTokens[Number(index)]);
 
   return html;

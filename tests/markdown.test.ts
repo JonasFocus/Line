@@ -136,6 +136,29 @@ const answer = 42 < 100;
     expect(html).not.toContain("!<a");
     expect(html).not.toContain('>Cat</a>');
   });
+
+  it("renders strikethrough", () => {
+    expect(renderMarkdown("~~retired~~")).toContain("<del>retired</del>");
+  });
+
+  it("renders strikethrough next to bold and code", () => {
+    const html = renderMarkdown("Keep **bold**, `code`, and ~~retired~~.");
+    expect(html).toContain("<strong>bold</strong>");
+    expect(html).toContain("<code>code</code>");
+    expect(html).toContain("<del>retired</del>");
+  });
+
+  it("does not treat a single tilde as strikethrough", () => {
+    const html = renderMarkdown("approx ~5 or ~~~~");
+    expect(html).not.toContain("<del>");
+    expect(html).toContain("approx ~5 or ~~~~");
+  });
+
+  it("escapes HTML inside strikethrough", () => {
+    const html = renderMarkdown("~~<em>raw</em>~~");
+    expect(html).toContain("<del>&lt;em&gt;raw&lt;/em&gt;</del>");
+    expect(html).not.toContain("<em>raw</em>");
+  });
 });
 
 describe("Document model", () => {
