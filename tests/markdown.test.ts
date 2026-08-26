@@ -136,6 +136,24 @@ const answer = 42 < 100;
     expect(html).not.toContain("!<a");
     expect(html).not.toContain('>Cat</a>');
   });
+
+  it("autolinks bare URLs without wrapping markdown links, code, or trailing punctuation", () => {
+    const html = renderMarkdown(
+      "Visit https://example.com. Use [docs](https://example.com/docs) or `http://localhost:3000`.",
+    );
+
+    expect(html).toContain('<a href="https://example.com">https://example.com</a>.');
+    expect(html).not.toContain('href="https://example.com."');
+    expect(html).toContain('<a href="https://example.com/docs">docs</a>');
+    expect(html).not.toContain('<a href="https://example.com/docs">https://example.com/docs</a>');
+    expect(html).toContain("<code>http://localhost:3000</code>");
+    expect(html).not.toContain('<a href="http://localhost:3000">');
+  });
+
+  it("autolinks bare http URLs", () => {
+    const html = renderMarkdown("Open http://example.com for more.");
+    expect(html).toContain('<a href="http://example.com">http://example.com</a>');
+  });
 });
 
 describe("Document model", () => {

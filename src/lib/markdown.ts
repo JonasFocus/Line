@@ -210,6 +210,18 @@ function safeSrc(src: string): string | null {
   return null;
 }
 
+/** Wrap leftover http(s) URLs in text runs; skip tag internals (href/src). */
+function autolinkBareUrls(html: string): string {
+  return html.replace(/(^|>)([^<]*)/g, (_match, prefix: string, text: string) => {
+    const linked = text.replace(/https?:\/\/[^\s<]+/gi, (raw) => {
+      const url = raw.replace(/[.,;:!?)]+$/, "");
+      if (!url) return raw;
+      return `<a href="${safeHref(url)}">${url}</a>${raw.slice(url.length)}`;
+    });
+    return `${prefix}${linked}`;
+  });
+}
+
 function renderInline(source: string): string {
   const codeTokens: string[] = [];
   const tokenized = source.replace(/`([^`]+)`/g, (_match, code: string) => {
@@ -236,6 +248,8 @@ function renderInline(source: string): string {
       return `<a href="${safeHref(href)}"${titleAttribute}>${label}</a>`;
     },
   );
+  // After markdown links/images; code spans are still tokens so they stay code.
+  html = autolinkBareUrls(html);
   html = html
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/__([^_]+)__/g, "<strong>$1</strong>")
