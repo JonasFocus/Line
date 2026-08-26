@@ -9,6 +9,7 @@ import { documentIsUnlinked, type LineDocument } from './lineDocument'
 import { LIBRARY_PERSIST_FAILED_MESSAGE, loadPersistedDocuments, removeDocumentFromLibrary, removeLegacyDemoDocuments, restoreDocumentToLibrary, savePersistedDocuments } from './persistedLibrary'
 import { libraryPaneHeading, resolveActiveFilter, resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
+import { previewHtmlForClipboard } from './copyPreviewHtml'
 import { shouldFocusLibrarySearchOnFind } from './findShortcut'
 import { type EditorMode, resolveMenuLayoutAction } from './menuLayout'
 import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
@@ -405,6 +406,21 @@ export default function App() {
       setToast(null)
     }, 2600)
   }, [])
+
+  const copyPreviewHtml = useCallback(async () => {
+    const content = documentsRef.current.find((document) => document.id === selectedIdRef.current)?.content ?? ''
+    const html = previewHtmlForClipboard(content)
+    if (typeof navigator.clipboard?.writeText !== 'function') {
+      setError('Could not copy HTML.')
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(html)
+      showToast('HTML copied')
+    } catch {
+      setError('Could not copy HTML.')
+    }
+  }, [showToast])
 
   const acceptExternalDocuments = useCallback((externalDocuments: unknown[]) => {
     if (closeReadyRef.current) return
@@ -861,12 +877,13 @@ export default function App() {
       if (action === 'save') void saveDocument()
       if (action === 'save-as') void saveDocument(true)
       if (action === 'reveal-in-folder') void revealSelectedDocument()
+      if (action === 'copy-html') void copyPreviewHtml()
       if (action === 'toggle-inspector') setInspectorOpen((current) => !current)
       const nextMode = resolveMenuLayoutAction(action)
       if (nextMode) setMode(nextMode)
     }
     const api = lineApi()
-    const disposeMenu = api?.onMenuCommand?.(handleAction)
+    const disposeMenu = api?.onMenuCommand?.(handleAction) ?? api?.onShortcut?.(handleAction)
     const disposeExternal = api?.onExternalFilesOpened?.(acceptExternalDocuments)
     const disposeExternalFailed = api?.onExternalOpenFailed?.((message) => {
       if (closeReadyRef.current) return
@@ -883,7 +900,7 @@ export default function App() {
       if (typeof disposeExternal === 'function') disposeExternal()
       if (typeof disposeExternalFailed === 'function') disposeExternalFailed()
     }
-  }, [acceptExternalDocuments, createDocument, importDocument, revealSelectedDocument, saveDocument])
+  }, [acceptExternalDocuments, copyPreviewHtml, createDocument, importDocument, revealSelectedDocument, saveDocument])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -892,6 +909,7 @@ export default function App() {
       if (event.key.toLowerCase() === 'o') { event.preventDefault(); void importDocument() }
       if (event.key.toLowerCase() === 's') { event.preventDefault(); void saveDocument(event.shiftKey) }
       if (event.key.toLowerCase() === 'j' && event.shiftKey) { event.preventDefault(); void revealSelectedDocument() }
+      if (event.key.toLowerCase() === 'c' && event.shiftKey) { event.preventDefault(); void copyPreviewHtml() }
       if (event.key.toLowerCase() === 'f' && !event.shiftKey) {
         if (!shouldFocusLibrarySearchOnFind(event.target, document.activeElement)) return
         event.preventDefault()
@@ -906,7 +924,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [createDocument, importDocument, revealSelectedDocument, saveDocument])
+  }, [copyPreviewHtml, createDocument, importDocument, revealSelectedDocument, saveDocument])
 
   useEffect(() => () => {
     if (toastTimer.current) window.clearTimeout(toastTimer.current)

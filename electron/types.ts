@@ -22,6 +22,7 @@ export type MenuCommand =
   | 'save'
   | 'save-as'
   | 'reveal-in-folder'
+  | 'copy-html'
   | 'edit-mode'
   | 'split-mode'
   | 'preview-mode'

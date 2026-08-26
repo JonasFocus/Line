@@ -445,6 +445,12 @@ function installApplicationMenu(): void {
         { role: 'pasteAndMatchStyle' },
         { role: 'delete' },
         { role: 'selectAll' },
+        { type: 'separator' },
+        {
+          label: 'Copy HTML',
+          accelerator: 'CommandOrControl+Shift+C',
+          click: () => sendMenuCommand('copy-html'),
+        },
       ],
     },
     {
