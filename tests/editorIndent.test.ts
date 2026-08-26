@@ -94,4 +94,31 @@ describe('applyEditorIndent', () => {
     const flushSelection = { value: '- one\n- two', selectionStart: 0, selectionEnd: 11 }
     expect(applyEditorIndent(flushSelection, 'outdent')).toEqual(flushSelection)
   })
+
+  it('outdents the leading blank line when the caret is at index 0', () => {
+    const state = { value: '\n  hello', selectionStart: 0, selectionEnd: 0 }
+    expect(applyEditorIndent(state, 'outdent')).toEqual(state)
+  })
+
+  it('indents a selection that includes index 0 when the file starts with a blank line', () => {
+    expect(applyEditorIndent(
+      { value: '\nhello', selectionStart: 0, selectionEnd: 4 },
+      'Tab',
+    )).toEqual({
+      value: '  \n  hello',
+      selectionStart: 0,
+      selectionEnd: 8,
+    })
+  })
+
+  it('indents a leading blank line on select-all', () => {
+    expect(applyEditorIndent(
+      { value: '\nhello', selectionStart: 0, selectionEnd: 6 },
+      'Tab',
+    )).toEqual({
+      value: '  \n  hello',
+      selectionStart: 0,
+      selectionEnd: 10,
+    })
+  })
 })
