@@ -295,6 +295,51 @@ a | b | c | d`);
     expect(html).toBe("<p>| not a table</p>");
     expect(html).not.toContain("<table>");
   });
+
+  it("autolinks bare URLs without wrapping markdown links, code, or trailing punctuation", () => {
+    const html = renderMarkdown(
+      "Visit https://example.com. Use [docs](https://example.com/docs) or `http://localhost:3000`.",
+    );
+
+    expect(html).toContain('<a href="https://example.com">https://example.com</a>.');
+    expect(html).not.toContain('href="https://example.com."');
+    expect(html).toContain('<a href="https://example.com/docs">docs</a>');
+    expect(html).not.toContain('<a href="https://example.com/docs">https://example.com/docs</a>');
+    expect(html).toContain("<code>http://localhost:3000</code>");
+    expect(html).not.toContain('<a href="http://localhost:3000">');
+  });
+
+  it("autolinks bare http URLs", () => {
+    const html = renderMarkdown("Open http://example.com for more.");
+    expect(html).toContain('<a href="http://example.com">http://example.com</a>');
+  });
+
+  it("does not double-escape query strings in autolinked URLs", () => {
+    const html = renderMarkdown("See https://example.com?a=1&b=2 later.");
+    expect(html).toContain(
+      '<a href="https://example.com?a=1&amp;b=2">https://example.com?a=1&amp;b=2</a>',
+    );
+    expect(html).not.toContain("&amp;amp;");
+  });
+
+  it("does not italicize underscores in Wikipedia-style URLs", () => {
+    const html = renderMarkdown("Read https://en.wikipedia.org/wiki/New_York_City today.");
+    expect(html).toContain(
+      '<a href="https://en.wikipedia.org/wiki/New_York_City">https://en.wikipedia.org/wiki/New_York_City</a>',
+    );
+    expect(html).not.toContain("<em>");
+  });
+
+  it("does not nest a markdown link whose label is the URL", () => {
+    const html = renderMarkdown("[https://example.com](https://example.com)");
+    expect(html).toBe('<p><a href="https://example.com">https://example.com</a></p>');
+  });
+
+  it("renders emphasis inside markdown link labels", () => {
+    expect(renderMarkdown("[**docs**](https://example.com)")).toContain(
+      '<a href="https://example.com"><strong>docs</strong></a>',
+    );
+  });
 });
 
 describe("Document model", () => {
