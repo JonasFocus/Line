@@ -7,3 +7,4 @@ builds/
 .DS_Store
 .vite/
 *.tsbuildinfo
+codenames.md
