@@ -864,7 +864,7 @@ textarea:focus-visible {
 
 .inspector-tabs {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 1fr;
   height: 31px;
   margin-top: 6px;
   background: #39393b;
@@ -885,6 +885,39 @@ textarea:focus-visible {
 .inspector-tabs button:last-child { border-right: 0; }
 .inspector-tabs button.active { color: #f0f0f1; background: var(--accent); }
 .inspector-tabs button:disabled { color: #77777c; opacity: 0.68; }
+
+.inspector-stats {
+  display: flex;
+  flex-direction: column;
+  margin: 16px 4px 0;
+}
+
+.inspector-stats div {
+  display: flex;
+  min-height: 32px;
+  padding: 6px 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.inspector-stats dt {
+  color: #9c9ca1;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.inspector-stats dd {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #d8d8da;
+  font-size: 12.5px;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .outline-heading {
   display: flex;
