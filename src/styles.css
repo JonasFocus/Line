@@ -1405,3 +1405,66 @@ textarea:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+.pane-resize-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  z-index: 4;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-app-region: no-drag;
+}
+
+.pane-resize-handle[data-edge="end"] {
+  right: 0;
+}
+
+.pane-resize-handle[data-edge="start"] {
+  left: 0;
+}
+
+.pane-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+  pointer-events: none;
+  transition: background 140ms ease;
+}
+
+.pane-resize-handle[data-edge="end"]::after {
+  right: 0;
+}
+
+.pane-resize-handle[data-edge="start"]::after {
+  left: 0;
+}
+
+.pane-resize-handle:hover::after,
+.pane-resize-handle.is-dragging::after,
+.pane-resize-handle:focus-visible::after {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.pane-resize-handle:focus-visible {
+  outline: 2px solid rgba(35, 136, 238, 0.7);
+  outline-offset: -2px;
+}
+
+.pane-resize-handle.is-dragging {
+  cursor: col-resize;
+}
+
+html:has(.pane-resize-handle.is-dragging),
+html:has(.pane-resize-handle.is-dragging) * {
+  cursor: col-resize !important;
+  user-select: none;
+}
