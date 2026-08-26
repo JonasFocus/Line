@@ -42,6 +42,42 @@ Two.
     expect(deriveTags(markdown)).toEqual(["science", "long-form", "cosmos"]);
   });
 
+  it("parses YAML block-list frontmatter tags", () => {
+    expect(
+      deriveTags(`---
+tags:
+  - Science
+  - "long-form"
+---
+# Title
+`),
+    ).toEqual(["science", "long-form"]);
+  });
+
+  it("combines block-list frontmatter tags with inline body tags", () => {
+    expect(
+      deriveTags(`---
+tags:
+  - science
+  - long-form
+---
+This is a short introduction. #Cosmos #science
+`),
+    ).toEqual(["science", "long-form", "cosmos"]);
+  });
+
+  it("ignores an empty frontmatter tag list", () => {
+    expect(
+      deriveTags(`---
+tags:
+  -
+  - ""
+---
+Just prose.
+`),
+    ).toEqual([]);
+  });
+
   it("extracts headings, ignores fences, and makes stable duplicate ids", () => {
     expect(deriveHeadings(markdown).map(({ id, text, level }) => ({ id, text, level }))).toEqual([
       { id: "a-small-universe", text: "A Small Universe", level: 1 },

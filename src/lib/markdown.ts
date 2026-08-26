@@ -107,21 +107,41 @@ export function deriveExcerpt(
   return `${cleanClip.trimEnd()}…`;
 }
 
+function cleanFrontmatterTag(value: string): string {
+  return value.trim().replace(/^['"]|['"]$/g, "").trim();
+}
+
+function parseInlineFrontmatterTags(tagsLine: string): string[] {
+  if (tagsLine.startsWith("[") && tagsLine.endsWith("]")) {
+    return tagsLine.slice(1, -1).split(",").map(cleanFrontmatterTag);
+  }
+
+  return tagsLine.split(/\s*,\s*|\s+/).map(cleanFrontmatterTag);
+}
+
 function frontmatterTags(markdown: string): string[] {
   const frontmatter = markdown.match(/^---\s*\r?\n([\s\S]*?)\r?\n---/);
   if (!frontmatter) return [];
 
-  const tagsLine = frontmatter[1].match(/^tags\s*:\s*(.+)$/im)?.[1]?.trim();
-  if (!tagsLine) return [];
+  const lines = frontmatter[1].split(/\r?\n/);
+  const tagsIndex = lines.findIndex((line) => /^tags\s*:/i.test(line));
+  if (tagsIndex === -1) return [];
 
-  if (tagsLine.startsWith("[") && tagsLine.endsWith("]")) {
-    return tagsLine
-      .slice(1, -1)
-      .split(",")
-      .map((tag) => tag.trim().replace(/^['"]|['"]$/g, ""));
+  const inline = lines[tagsIndex].replace(/^tags\s*:/i, "").trim();
+  if (inline) return parseInlineFrontmatterTags(inline);
+
+  const tags: string[] = [];
+  for (let index = tagsIndex + 1; index < lines.length; index += 1) {
+    const listItem = lines[index].match(/^\s*-\s+(.+)/);
+    if (listItem) {
+      const tag = cleanFrontmatterTag(listItem[1]);
+      if (tag) tags.push(tag);
+      continue;
+    }
+    if (/^\s*[\w-]+\s*:/.test(lines[index])) break;
   }
 
-  return tagsLine.split(/\s*,\s*|\s+/);
+  return tags;
 }
 
 export function deriveTags(markdown: string): string[] {
