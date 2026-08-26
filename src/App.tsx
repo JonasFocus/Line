@@ -9,7 +9,8 @@ import { documentIsUnlinked, type LineDocument } from './lineDocument'
 import { LIBRARY_PERSIST_FAILED_MESSAGE, loadPersistedDocuments, removeDocumentFromLibrary, removeLegacyDemoDocuments, restoreDocumentToLibrary, savePersistedDocuments } from './persistedLibrary'
 import { libraryPaneHeading, resolveActiveFilter, resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
-import { shouldFocusLibrarySearchOnFind } from './findShortcut'
+import { isMarkdownEditorTarget, shouldFocusLibrarySearchOnFind } from './findShortcut'
+import { resolveLibraryKeyboardTarget } from './libraryKeyboard'
 import { type EditorMode, resolveMenuLayoutAction } from './menuLayout'
 import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
 import { loadSessionChrome, saveSessionChrome, type SessionChrome } from './sessionChrome'
@@ -40,6 +41,13 @@ function isDocument(value: unknown): value is LineDocument {
   if (!value || typeof value !== 'object') return false
   const item = value as Record<string, unknown>
   return typeof item.id === 'string' && typeof item.title === 'string' && typeof item.content === 'string'
+}
+
+function isLibraryKeyboardScope(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false
+  if (isMarkdownEditorTarget(target)) return false
+  if (target.closest('.document-search')) return false
+  return Boolean(target.closest('.document-list, .document-pane'))
 }
 
 const DOCUMENT_CONFLICT_MESSAGE =
@@ -389,6 +397,7 @@ export default function App() {
   const externalFilesReadyRef = useRef(false)
   const documentsRef = useRef(documents)
   const selectedIdRef = useRef(selectedId)
+  const visibleIdsRef = useRef<readonly string[]>([])
 
   documentsRef.current = documents
   selectedIdRef.current = selectedId
@@ -437,6 +446,8 @@ export default function App() {
       return `${document.title} ${document.content} ${document.tags.join(' ')}`.toLowerCase().includes(query)
     })
   }, [documents, activeFilter, activeTag, search])
+
+  visibleIdsRef.current = filteredDocuments.map((document) => document.id)
 
   // Tags are live-derived from documents. Clear a ghost filter when the tag
   // disappears from every note (sidebar tags section may unmount entirely).
@@ -907,6 +918,30 @@ export default function App() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [createDocument, importDocument, revealSelectedDocument, saveDocument])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      if (!isLibraryKeyboardScope(event.target) && !isLibraryKeyboardScope(document.activeElement)) return
+
+      const nextId = resolveLibraryKeyboardTarget({
+        key: event.key,
+        selectedId: selectedIdRef.current,
+        visibleIds: visibleIdsRef.current,
+      })
+      if (!nextId) return
+
+      event.preventDefault()
+      synchronizeSelection(nextId)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [synchronizeSelection])
+
+  useEffect(() => {
+    if (!selectedId) return
+    document.querySelector('.document-list .document-card.selected')?.scrollIntoView({ block: 'nearest' })
+  }, [selectedId])
 
   useEffect(() => () => {
     if (toastTimer.current) window.clearTimeout(toastTimer.current)
