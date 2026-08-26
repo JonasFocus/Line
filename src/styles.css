@@ -1476,8 +1476,9 @@ textarea:focus-visible {
   cursor: col-resize;
 }
 
-html:has(.pane-resize-handle.is-dragging),
-html:has(.pane-resize-handle.is-dragging) * {
+body.is-pane-resizing,
+body.is-pane-resizing * {
   cursor: col-resize !important;
   user-select: none;
+  -webkit-app-region: no-drag;
 }
