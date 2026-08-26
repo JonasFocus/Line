@@ -275,6 +275,64 @@ function listItem(line: string): { ordered: boolean; text: string } | null {
   return null;
 }
 
+type TableAlignment = "left" | "center" | "right" | "none";
+
+function splitTableRow(line: string): string[] {
+  let content = line.trim();
+  if (content.startsWith("|")) content = content.slice(1);
+  if (content.endsWith("|")) content = content.slice(0, -1);
+  return content.split("|").map((cell) => cell.trim());
+}
+
+function parseDelimiterAlignments(line: string): TableAlignment[] | null {
+  if (!line.includes("|")) return null;
+
+  const cells = splitTableRow(line);
+  if (cells.length === 0) return null;
+
+  const alignments: TableAlignment[] = [];
+  for (const cell of cells) {
+    const match = cell.match(/^(:?)-{1,}(:?)$/);
+    if (!match) return null;
+    const left = match[1] === ":";
+    const right = match[2] === ":";
+    if (left && right) alignments.push("center");
+    else if (left) alignments.push("left");
+    else if (right) alignments.push("right");
+    else alignments.push("none");
+  }
+  return alignments;
+}
+
+function tableAt(
+  lines: string[],
+  index: number,
+): { header: string[]; alignments: TableAlignment[] } | null {
+  const headerLine = lines[index];
+  const delimiterLine = lines[index + 1];
+  if (headerLine === undefined || delimiterLine === undefined) return null;
+  if (!headerLine.trim() || !delimiterLine.trim()) return null;
+  if (!headerLine.includes("|")) return null;
+
+  const alignments = parseDelimiterAlignments(delimiterLine);
+  if (!alignments) return null;
+
+  const header = splitTableRow(headerLine);
+  if (header.length === 0 || header.length !== alignments.length) return null;
+  return { header, alignments };
+}
+
+function tableCellHtml(tag: "th" | "td", text: string, alignment: TableAlignment): string {
+  const style = alignment === "none" ? "" : ` style="text-align:${alignment}"`;
+  return `<${tag}${style}>${renderInline(text)}</${tag}>`;
+}
+
+function cellsForColumns(cells: string[], columnCount: number): string[] {
+  const row = cells.slice(0, columnCount);
+  while (row.length < columnCount) row.push("");
+  return row;
+}
+
 export function renderMarkdown(markdown: string): string {
   const lines = removeFrontmatter(markdown).split(/\r?\n/);
   const headings = deriveHeadings(markdown);
@@ -345,6 +403,31 @@ export function renderMarkdown(markdown: string): string {
       continue;
     }
 
+    const table = tableAt(lines, index);
+    if (table) {
+      const columnCount = table.alignments.length;
+      const headerCells = cellsForColumns(table.header, columnCount)
+        .map((cell, column) => tableCellHtml("th", cell, table.alignments[column] ?? "none"))
+        .join("");
+      index += 2;
+
+      const bodyRows: string[] = [];
+      while (index < lines.length) {
+        const bodyLine = lines[index];
+        if (!bodyLine || !bodyLine.trim() || !bodyLine.includes("|")) break;
+        const rowCells = cellsForColumns(splitTableRow(bodyLine), columnCount)
+          .map((cell, column) => tableCellHtml("td", cell, table.alignments[column] ?? "none"))
+          .join("");
+        bodyRows.push(`<tr>${rowCells}</tr>`);
+        index += 1;
+      }
+
+      const thead = `<thead><tr>${headerCells}</tr></thead>`;
+      const tbody = bodyRows.length > 0 ? `<tbody>${bodyRows.join("")}</tbody>` : "";
+      output.push(`<table>${thead}${tbody}</table>`);
+      continue;
+    }
+
     const paragraph = [line.trim()];
     index += 1;
     while (
@@ -354,7 +437,8 @@ export function renderMarkdown(markdown: string): string {
       !/^\s{0,3}#{1,6}\s+/.test(lines[index]) &&
       !/^\s{0,3}>\s?/.test(lines[index]) &&
       !/^\s{0,3}(?:-{3,}|\*{3,}|_{3,})\s*$/.test(lines[index]) &&
-      !listItem(lines[index])
+      !listItem(lines[index]) &&
+      !tableAt(lines, index)
     ) {
       paragraph.push(lines[index].trim());
       index += 1;

@@ -195,6 +195,49 @@ const answer = 42 < 100;
     expect(html).toContain("<del>&lt;em&gt;raw&lt;/em&gt;</del>");
     expect(html).not.toContain("<em>raw</em>");
   });
+
+  it("renders a two-column GFM table", () => {
+    const html = renderMarkdown(`| Name | Role |
+| --- | --- |
+| Ada | Engineer |`);
+
+    expect(html).toContain(
+      "<table><thead><tr><th>Name</th><th>Role</th></tr></thead><tbody><tr><td>Ada</td><td>Engineer</td></tr></tbody></table>",
+    );
+    expect(html).not.toContain("<p>");
+  });
+
+  it("applies left, center, and right alignment from the delimiter", () => {
+    const html = renderMarkdown(`Left | Center | Right | None
+|:---|:---:|---:|---
+a | b | c | d`);
+
+    expect(html).toContain('<th style="text-align:left">Left</th>');
+    expect(html).toContain('<th style="text-align:center">Center</th>');
+    expect(html).toContain('<th style="text-align:right">Right</th>');
+    expect(html).toContain("<th>None</th>");
+    expect(html).toContain('<td style="text-align:left">a</td>');
+    expect(html).toContain('<td style="text-align:center">b</td>');
+    expect(html).toContain('<td style="text-align:right">c</td>');
+    expect(html).toContain("<td>d</td>");
+  });
+
+  it("renders inline markdown inside table cells", () => {
+    const html = renderMarkdown(`| Format | Example |
+| --- | --- |
+| bold | **strong** |
+| link | [src](https://example.com) |`);
+
+    expect(html).toContain("<th>Format</th><th>Example</th>");
+    expect(html).toContain("<td>bold</td><td><strong>strong</strong></td>");
+    expect(html).toContain('<td>link</td><td><a href="https://example.com">src</a></td>');
+  });
+
+  it("does not treat a lone pipe paragraph as a table", () => {
+    const html = renderMarkdown("| not a table");
+    expect(html).toBe("<p>| not a table</p>");
+    expect(html).not.toContain("<table>");
+  });
 });
 
 describe("Document model", () => {
