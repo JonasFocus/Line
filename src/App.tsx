@@ -11,7 +11,7 @@ import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
 import { shouldFocusLibrarySearchOnFind } from './findShortcut'
 import { type EditorMode, resolveMenuLayoutAction } from './menuLayout'
 import { reconcileSaveState, resolveSaveChipLabel, resolveSaveState, type SaveState } from './saveState'
-
+import { loadSessionChrome, saveSessionChrome, type SessionChrome } from './sessionChrome'
 type SaveRequest = {
   defaultToDocuments: boolean
   document: LineDocument
@@ -48,6 +48,13 @@ const ATOMIC_SAVE_UNAVAILABLE_MESSAGE =
 
 function readPersistedDocuments(): LineDocument[] {
   return removeLegacyDemoDocuments(loadPersistedDocuments(() => window.localStorage, []))
+}
+
+function readPersistedSessionChrome(documents: LineDocument[] = readPersistedDocuments()) {
+  return loadSessionChrome(
+    () => window.localStorage,
+    documents.map((document) => document.id),
+  )
 }
 
 function normalizeImported(value: unknown): LineDocument | null {
@@ -357,14 +364,18 @@ function Inspector({ document, outline, activeId, search, onSearch, onNavigate, 
 
 export default function App() {
   const [documents, setDocuments] = useState<LineDocument[]>(readPersistedDocuments)
-  const [selectedId, setSelectedId] = useState<string | null>(() => readPersistedDocuments()[0]?.id || null)
+  const [selectedId, setSelectedId] = useState<string | null>(() => readPersistedSessionChrome().selectedId)
   const [activeFilter, setActiveFilter] = useState('all')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [outlineSearch, setOutlineSearch] = useState('')
-  const [mode, setMode] = useState<EditorMode>('edit')
-  const [inspectorOpen, setInspectorOpen] = useState(false)
-  const [saveState, setSaveState] = useState<SaveState>(() => resolveSaveState(readPersistedDocuments()[0]))
+  const [mode, setMode] = useState<EditorMode>(() => readPersistedSessionChrome().mode)
+  const [inspectorOpen, setInspectorOpen] = useState(() => readPersistedSessionChrome().inspectorOpen)
+  const [saveState, setSaveState] = useState<SaveState>(() => {
+    const initialDocuments = readPersistedDocuments()
+    const selected = initialDocuments.find((document) => document.id === readPersistedSessionChrome(initialDocuments).selectedId)
+    return resolveSaveState(selected)
+  })
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [toast, setToast] = useState<ToastState | null>(null)
@@ -746,6 +757,10 @@ export default function App() {
     return savePersistedDocuments(() => window.localStorage, snapshot)
   }, [])
 
+  const persistSessionChrome = useCallback((chrome: SessionChrome) => {
+    return saveSessionChrome(() => window.localStorage, chrome)
+  }, [])
+
   useEffect(() => {
     const timer = window.setTimeout(() => {
       if (!persistDocuments(documents)) {
@@ -754,6 +769,13 @@ export default function App() {
     }, 350)
     return () => window.clearTimeout(timer)
   }, [documents, persistDocuments])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      persistSessionChrome({ selectedId, mode, inspectorOpen })
+    }, 350)
+    return () => window.clearTimeout(timer)
+  }, [selectedId, mode, inspectorOpen, persistSessionChrome])
 
   useEffect(() => {
     const warnAboutUnsavedChanges = (event: BeforeUnloadEvent) => {
