@@ -294,6 +294,12 @@ function listItem(line: string): ParsedListItem | null {
   return null;
 }
 
+function parseTaskMarker(text: string): { checked: boolean; rest: string } | null {
+  if (text.startsWith("[ ] ")) return { checked: false, rest: text.slice(4) };
+  if (text.startsWith("[x] ") || text.startsWith("[X] ")) return { checked: true, rest: text.slice(4) };
+  return null;
+}
+
 function renderListRange(items: ParsedListItem[], start: number, end: number): string {
   const parts: string[] = [];
   let index = start;
@@ -311,7 +317,16 @@ function renderListRange(items: ParsedListItem[], start: number, end: number): s
       while (index < end && items[index].level > item.level) {
         index += 1;
       }
-      lis.push(`<li>${renderInline(item.text)}${renderListRange(items, nestedStart, index)}</li>`);
+      const nested = renderListRange(items, nestedStart, index);
+      const task = !item.ordered ? parseTaskMarker(item.text) : null;
+      if (task) {
+        const checked = task.checked ? " checked" : "";
+        lis.push(
+          `<li class="task-item"><input type="checkbox" disabled${checked}> ${renderInline(task.rest)}${nested}</li>`,
+        );
+      } else {
+        lis.push(`<li>${renderInline(item.text)}${nested}</li>`);
+      }
     }
 
     parts.push(`<${tag}>${lis.join("")}</${tag}>`);
