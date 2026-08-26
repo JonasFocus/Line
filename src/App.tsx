@@ -399,8 +399,8 @@ function Workspace({ document, mode, saveState, textareaRef, onDocumentChange, o
       ) : (
         <div className="workspace-empty">
           <span><Icon name="edit" size={28} /></span>
-          <p className="workspace-kicker">{writerName ? `Hello, ${writerName}` : 'LINE FOR MARKDOWN'}</p>
-          <h2>Write something worth keeping.</h2>
+          <p className="workspace-kicker">LINE FOR MARKDOWN</p>
+          <h2>{writerName ? `Write something worth keeping, ${writerName}.` : 'Write something worth keeping.'}</h2>
           <p>Create a clean Markdown file or open one already on your Mac.</p>
           <div className="workspace-empty-actions">
             <button className="primary" onClick={onNew} type="button"><Icon name="newDocument" size={16} />Create Markdown</button>
