@@ -70,6 +70,9 @@ function normalizeDocument(value: unknown): LineDocument | null {
       : getMetadata().tags,
     favorite: item.favorite === true,
     updatedAt: typeof item.updatedAt === 'string' && item.updatedAt.trim() ? item.updatedAt : 'Just now',
+    ...(typeof item.updatedAtMs === 'number' && Number.isFinite(item.updatedAtMs)
+      ? { updatedAtMs: item.updatedAtMs }
+      : {}),
     path: null,
     revision: typeof item.revision === 'string' ? item.revision : null,
     dirty: item.dirty === true,

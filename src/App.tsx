@@ -4,6 +4,14 @@ import { extractOutline, MarkdownPreview, type OutlineItem } from './components/
 import { parseMarkdownMetadata } from './lib'
 import { LatestTaskQueue } from './latestTaskQueue'
 import { documentIsUnlinked, type LineDocument } from './lineDocument'
+import {
+  cycleLibrarySort,
+  librarySortLabel,
+  loadLibrarySort,
+  saveLibrarySort,
+  sortDocuments,
+  type LibrarySort,
+} from './librarySort'
 import { LIBRARY_PERSIST_FAILED_MESSAGE, loadPersistedDocuments, removeDocumentFromLibrary, removeLegacyDemoDocuments, restoreDocumentToLibrary, savePersistedDocuments } from './persistedLibrary'
 import { libraryPaneHeading, resolveActiveFilter, resolveActiveTag, resolveSelectionAfterDocumentsChange } from './selection'
 import { resolveSaveAs, saveDocumentsBeforeClose } from './saveBeforeClose'
@@ -87,7 +95,7 @@ function reconcileOpenedDocuments(current: LineDocument[], incoming: LineDocumen
 
 function PlainButton({ icon, label, onClick, active = false, disabled = false, className = '' }: { icon: IconName; label: string; onClick?: () => void; active?: boolean; disabled?: boolean; className?: string }) {
   return (
-    <button className={`icon-button ${active ? 'is-active' : ''} ${className}`} disabled={disabled} onClick={onClick} title={label} type="button">
+    <button aria-label={label} className={`icon-button ${active ? 'is-active' : ''} ${className}`} disabled={disabled} onClick={onClick} title={label} type="button">
       <Icon name={icon} size={18} />
       <span className="sr-only">{label}</span>
     </button>
@@ -159,18 +167,20 @@ function Sidebar({ documents, activeFilter, activeTag, onFilter, onTag, onOpenFo
   )
 }
 
-function DocumentList({ documents, selectedId, search, activeFilter, activeTag, onSearch, onSelect, onFavorite, onRemove, onNew, onImport }: {
+function DocumentList({ documents, selectedId, search, activeFilter, activeTag, librarySort, onSearch, onSelect, onFavorite, onRemove, onNew, onImport, onCycleSort }: {
   documents: LineDocument[]
   selectedId: string | null
   search: string
   activeFilter: string
   activeTag: string | null
+  librarySort: LibrarySort
   onSearch: (value: string) => void
   onSelect: (id: string) => void
   onFavorite: (id: string) => void
   onRemove: (id: string) => void
   onNew: () => void
   onImport: () => void
+  onCycleSort: () => void
 }) {
   const isFiltered = Boolean(search || activeTag || activeFilter === 'unlinked')
 
@@ -179,6 +189,7 @@ function DocumentList({ documents, selectedId, search, activeFilter, activeTag, 
       <header className="document-toolbar titlebar-region">
         <div className="document-heading">{libraryPaneHeading(activeFilter, activeTag)}</div>
         <div className="toolbar-group no-drag">
+          <PlainButton icon="sort" label={librarySortLabel(librarySort)} onClick={onCycleSort} />
           <PlainButton icon="newDocument" label="New document" onClick={onNew} />
           <PlainButton icon="import" label="Import Markdown" onClick={onImport} />
         </div>
@@ -354,6 +365,7 @@ export default function App() {
   const [activeFilter, setActiveFilter] = useState('all')
   const [activeTag, setActiveTag] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const [librarySort, setLibrarySort] = useState<LibrarySort>(() => loadLibrarySort(() => window.localStorage))
   const [outlineSearch, setOutlineSearch] = useState('')
   const [mode, setMode] = useState<EditorMode>('edit')
   const [inspectorOpen, setInspectorOpen] = useState(false)
@@ -410,14 +422,15 @@ export default function App() {
 
   const filteredDocuments = useMemo(() => {
     const query = search.trim().toLowerCase()
-    return documents.filter((document) => {
+    const filtered = documents.filter((document) => {
       if (activeFilter === 'unlinked' && !documentIsUnlinked(document)) return false
       if (activeFilter.startsWith('doc:') && document.id !== activeFilter.slice(4)) return false
       if (activeTag && !document.tags.includes(activeTag)) return false
       if (!query) return true
       return `${document.title} ${document.content} ${document.tags.join(' ')}`.toLowerCase().includes(query)
     })
-  }, [documents, activeFilter, activeTag, search])
+    return sortDocuments(filtered, librarySort)
+  }, [documents, activeFilter, activeTag, search, librarySort])
 
   // Tags are live-derived from documents. Clear a ghost filter when the tag
   // disappears from every note (sidebar tags section may unmount entirely).
@@ -473,6 +486,7 @@ export default function App() {
       ...(metadata ? { title: metadata.title, tags: metadata.tags } : {}),
       dirty: true,
       updatedAt: 'Just now',
+      updatedAtMs: Date.now(),
     } : document)
     documentsRef.current = nextDocuments
     setDocuments(nextDocuments)
@@ -489,6 +503,7 @@ export default function App() {
       tags: [],
       favorite: false,
       updatedAt: 'Just now',
+      updatedAtMs: Date.now(),
       path: null,
       revision: null,
       dirty: true,
@@ -899,6 +914,12 @@ export default function App() {
         activeFilter={activeFilter}
         activeTag={activeTag}
         documents={filteredDocuments}
+        librarySort={librarySort}
+        onCycleSort={() => {
+          const nextSort = cycleLibrarySort(librarySort)
+          setLibrarySort(nextSort)
+          saveLibrarySort(() => window.localStorage, nextSort)
+        }}
         onFavorite={(id) => {
           if (closeReadyRef.current) return
           const nextDocuments = documentsRef.current.map((document) => document.id === id ? { ...document, favorite: !document.favorite } : document)
